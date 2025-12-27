@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "805217685861",
+    "project_id": "odhpay-ad71d",
+    "storage_bucket": "odhpay-ad71d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:805217685861:android:8b0ab2e059e48c7c50518c",
+        "android_client_info": {
+          "package_name": "com.ODHPAY_PROJ.com"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "805217685861-3lm1tfarpr75na2i999huebv6ek9te8a.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDghNXGldcf2x2V7hWYp15SVZHmaFajy0k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "805217685861-3lm1tfarpr75na2i999huebv6ek9te8a.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

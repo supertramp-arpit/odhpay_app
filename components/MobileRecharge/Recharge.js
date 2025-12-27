@@ -1,0 +1,903 @@
+// File: RechargeScreen.js — global search across all categories + refined UI
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  TouchableWithoutFeedback,
+  Keyboard,
+  Image,
+  ActivityIndicator,
+  FlatList,
+  RefreshControl,
+  Animated,
+  StatusBar,
+  Dimensions,
+} from "react-native";
+import { Ionicons, MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
+import Theme, { getResponsiveValue } from "../Theme";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import OperatorPopup from "./OperatorPopup";
+import { useAppStore } from "../../store/useAppStore";
+import axios from "axios";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const isSmallDevice = SCREEN_WIDTH < 375;
+
+/* ---------------- Session cache ---------------- */
+export const GlobalPlans = {
+  raw: null,
+  categoryList: [],
+  planById: {},
+  categoryToPlanIds: {},
+  lastUpdated: null,
+};
+
+const planToPack = (p, planId) => {
+  const getAttr = (tag) =>
+    (p.attributes || []).find((a) => a.tag?.toLowerCase() === tag.toLowerCase())?.value || null;
+
+  const validity =
+    p.validityInDays && p.validityInDays > 0
+      ? `${p.validityInDays} Days`
+      : getAttr("Validity") || "NA";
+
+  const data =
+    p.data || getAttr("Data") || (p.talktime ? `Talktime Rs${p.talktime}` : "-");
+
+  return {
+    planId,
+    price: Number(p.amount),
+    validity,
+    data,
+    description: p.description || "",
+    raw: p,
+  };
+};
+
+// Use Theme colors
+const COLORS = {
+  primary: Theme.colors.primary,
+  primaryLight: Theme.colors.inputBg,
+  secondary: Theme.colors.secondary,
+  bg: Theme.colors.background,
+  text: Theme.colors.text,
+  subtext: Theme.colors.textSecondary,
+  border: Theme.colors.border,
+  success: Theme.colors.success,
+  cardBg: Theme.colors.surface,
+};
+
+/* ---------------- Screen ---------------- */
+const RechargeScreen = () => {
+  const { operatorCircle, setSelectedOperator } = useAppStore();
+  const [modalVisible, setModalVisible] = useState(false);
+
+  const [circleId, setCircleId] = useState(null);
+  const [operatorId, setOperatorId] = useState(null);
+  const [selectedLogo, setSelectedLogo] = useState(null);
+  const [plansVersion, setPlansVersion] = useState(0); // bump to force re-render when plans cache changes
+  const [categories, setCategories] = useState([]);
+
+  const navigation = useNavigation();
+  const route = useRoute();
+  const { contactName, contactNumber } = route.params || {};
+
+  const [selectedCat, setSelectedCat] = useState(null);
+
+  // NOTE: still numeric keyboard (as you wanted), but search now spans ALL categories.
+  const [query, setQuery] = useState("");
+
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // animated underline for tabs
+  const underlineX = useRef(new Animated.Value(0)).current;
+  const underlineW = useRef(new Animated.Value(0)).current;
+  const tabRefs = useRef({}); // store x & w for each tab
+
+  // keep a ref to the search input so it never loses focus
+  const searchRef = useRef(null);
+
+  useEffect(() => {
+    navigation.setOptions({ title: contactName || "Recharge" });
+  }, [navigation, contactName]);
+
+  const operatorlistWithImg = [
+    { name: "Airtel Prepaid", logo: require("../../assets/airtel.png") },
+    { name: "BSNL Prepaid", logo: require("../../assets/bsnl2.png") },
+    { name: "Jio Prepaid", logo: require("../../assets/jio.png") },
+    { name: "Vi Prepaid", logo: require("../../assets/vi.png") },
+  ];
+  const selectedOperatorImage =
+    selectedLogo ||
+    operatorlistWithImg.find(
+      (item) => item.name.toLowerCase() === (operatorCircle?.operator || "").toLowerCase()
+    )?.logo ||
+    require("../../assets/jio.png");
+
+  const resetPlans = () => {
+    GlobalPlans.raw = null;
+    GlobalPlans.categoryList = [];
+    GlobalPlans.planById = {};
+    GlobalPlans.categoryToPlanIds = {};
+    GlobalPlans.lastUpdated = Date.now();
+    setSelectedCat(null);
+    setQuery("");
+    setCategories([]);
+    tabRefs.current = {};
+    underlineX.setValue(0);
+    underlineW.setValue(0);
+    setPlansVersion((v) => v + 1);
+  };
+
+  /* ---- SIM mapping ---- */
+  const getSimProvider = async (mobile_no) => {
+    try {
+      setLoading(true);
+      let number = String(mobile_no || "").replace(/^\+91\s?/, "").replace(/\s+/g, "");
+      if (!number) return;
+
+      const headers = { "Content-Type": "application/json", Accept: "application/json" };
+
+      const response = await axios.post(
+        `https://www.freecharge.in/api/fulfilment/nosession/fetch/operatorMapping`,
+        { serviceNumber: number, productCode: "MR" },
+        { headers }
+      );
+
+      const opId = response?.data?.data?.operatorId ?? null;
+      const cirId = response?.data?.data?.circleId ?? null;
+      setOperatorId(opId);
+      setCircleId(cirId);
+
+      resetPlans();
+      const billerResponse = await axios.get(
+        `https://www.freecharge.in/api/catalog/nosession/sub-category/SHORT_CODE/MR`
+      );
+      const billers = Array.isArray(billerResponse?.data?.data?.billers)
+        ? billerResponse.data.data.billers
+        : [];
+
+      const biller = billers.find((b) => Number(b.operatorMasterId) === Number(opId)) || null;
+      const circleObj = biller?.circles?.find((c) => Number(c.circleId) === Number(cirId)) || null;
+
+      setSelectedOperator({
+        circle: circleObj?.circleName || operatorCircle?.circle,
+        operator: biller?.name || operatorCircle?.operator,
+      });
+      setSelectedLogo(
+        operatorlistWithImg.find((item) => item.name.toLowerCase() === (biller?.name || "").toLowerCase())
+          ?.logo || null
+      );
+      if (opId && cirId) {
+        fetchPlans(opId, cirId);
+      }
+    } catch {
+      // keep UI quiet on mapping errors
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (contactNumber) getSimProvider(contactNumber);
+  }, [contactNumber]);
+
+  /* ---- Fetch plans when ids ready ---- */
+  const fetchPlans = async (opId, cirId) => {
+    try {
+      console.log(opId, cirId)
+      setLoading(true);
+      resetPlans();
+      const res = await axios.get(
+        `https://www.freecharge.in/rds/plans/${opId}/${cirId}/RlJFRUNIQVJHRV9WMnxBbW95bk1idWErUGVyK1pVSFZXUUhseE91RWREazRiNDJZRT0=`
+      );
+
+      const payload = res?.data?.data ?? null;
+      if (!payload) throw new Error("Invalid plans response.");
+
+      const { categoryDetails = [], planDetails = {} } = payload;
+
+      // console.log(opId, cirId, categoryDetails)
+      const planById = {};
+      Object.keys(planDetails).forEach((id) => (planById[id] = planDetails[id]));
+
+      const categoryToPlanIds = {};
+      const categoryList = [];
+      categoryDetails.forEach((c) => {
+        const ids = Array.isArray(c.planIds) ? c.planIds.map(String) : [];
+        categoryToPlanIds[c.category] = ids;
+        categoryList.push(c.category);
+      });
+
+      GlobalPlans.raw = payload;
+      GlobalPlans.planById = planById;
+      GlobalPlans.categoryToPlanIds = categoryToPlanIds;
+      GlobalPlans.categoryList = categoryList;
+      GlobalPlans.lastUpdated = Date.now();
+      setCategories(categoryList);
+
+      const preferred = ["Recommended", "Popular", "Unlimited", "Truly unlimited"];
+      const pick =
+        preferred.find((p) =>
+          categoryList.find((c) => c.toLowerCase() === p.toLowerCase())
+        ) || categoryList[0] || null;
+      setSelectedCat(pick);
+      setPlansVersion((v) => v + 1);
+
+      // set initial underline to active tab
+      setTimeout(() => moveUnderlineTo(pick), 0);
+    } catch {
+      // show empty state
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (operatorId && circleId) fetchPlans(operatorId, circleId);
+  }, [operatorId, circleId]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    if (operatorId && circleId) fetchPlans(operatorId, circleId);
+    else if (contactNumber) getSimProvider(contactNumber);
+    else setRefreshing(false);
+  };
+
+  /* ---- Build data views ---- */
+  // Flatten ALL packs once (memoized) for fast global search
+  const allPacks = useMemo(() => {
+    const packs = [];
+    categories.forEach((cat) => {
+      const ids = GlobalPlans.categoryToPlanIds[cat] || [];
+      ids.forEach((id) => {
+        const p = GlobalPlans.planById[id];
+        if (p) packs.push({ ...planToPack(p, id), _cat: cat });
+      });
+    });
+    // remove duplicates if any (same plan id appearing in multiple cats)
+    const seen = new Set();
+    return packs.filter((pk) => (seen.has(pk.planId) ? false : (seen.add(pk.planId), true)));
+  }, [plansVersion, categories]);
+
+  // Packs in selected category (for normal browsing when search empty)
+  const selectedCatPacks = useMemo(() => {
+    if (!selectedCat) return [];
+    const ids = GlobalPlans.categoryToPlanIds[selectedCat] || [];
+    return ids
+      .map((id) => {
+        const p = GlobalPlans.planById[id];
+        return p ? { ...planToPack(p, id), _cat: selectedCat } : null;
+      })
+      .filter(Boolean);
+  }, [selectedCat, plansVersion]);
+
+  // ✅ GLOBAL SEARCH: when query is present, search across ALL categories.
+  const filteredPack = useMemo(() => {
+    const q = query.trim();
+    if (!q) return selectedCatPacks;
+
+    // numeric-first search (your requirement) + soft text fallback if pasted
+    const isNum = /^[0-9]+(\.[0-9]+)?$/.test(q);
+    const qLower = q.toLowerCase();
+
+    return allPacks.filter((pk) => {
+      if (isNum) {
+        // exact or substring match on price
+        return Number(pk.price) === Number(q) || String(pk.price).includes(q);
+      }
+      // text fallback: rare, but works if user pastes a word
+      return (
+        pk.description?.toLowerCase().includes(qLower) ||
+        pk.validity?.toLowerCase().includes(qLower) ||
+        pk.data?.toLowerCase().includes(qLower) ||
+        String(pk.price).includes(qLower) ||
+        pk._cat?.toLowerCase().includes(qLower)
+      );
+    });
+  }, [query, allPacks, selectedCatPacks]);
+
+  // small summary when searching globally
+  const searchSummary = useMemo(() => {
+    if (!query.trim()) return null;
+    const cats = new Set(filteredPack.map((p) => p._cat));
+    return { count: filteredPack.length, catCount: cats.size };
+  }, [filteredPack, query]);
+
+  /* ---------------- UI parts ---------------- */
+  const moveUnderlineTo = (category) => {
+    const meta = tabRefs.current[category];
+    if (!meta) return;
+    Animated.spring(underlineX, { toValue: meta.x, useNativeDriver: false, tension: 180, friction: 18 }).start();
+    Animated.spring(underlineW, { toValue: meta.w, useNativeDriver: false, tension: 180, friction: 18 }).start();
+  };
+
+  const TabChip = ({ category }) => {
+    const active = selectedCat === category;
+    return (
+      <TouchableOpacity
+        onLayout={(e) => {
+          const { x, width } = e.nativeEvent.layout;
+          tabRefs.current[category] = { x, w: width };
+          if (active) moveUnderlineTo(category);
+        }}
+        onPress={() => {
+          setSelectedCat(category);
+          moveUnderlineTo(category);
+        }}
+        activeOpacity={0.9}
+        style={[styles.tabBtn, active && styles.tabBtnActive]}
+      >
+        <Text style={[styles.tabText, active && styles.tabTextActive]} numberOfLines={1}>
+          {category}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  // SINGLE-LINE validity + per-day data (truncates gracefully)
+  const InlineInfo = ({ validity, data }) => (
+    <Text style={styles.inlineInfo} numberOfLines={1} ellipsizeMode="tail">
+      <Text style={styles.inlineLabel}>Validity: </Text>
+      <Text style={styles.inlineValue}>{validity || "—"}</Text>
+      <Text>   •   </Text>
+      <Text style={styles.inlineLabel}>Data: </Text>
+      <Text style={styles.inlineValue}>{data || "—"}</Text>
+    </Text>
+  );
+
+  const PlanCard = ({ pack }) => (
+    <TouchableOpacity
+      activeOpacity={0.92}
+      style={styles.planCard}
+      onPress={() =>
+        navigation.navigate("RechargeScreenPay", {
+          contactName,
+          contactNumber,
+          pack,
+          img: selectedOperatorImage,
+          operator_code: operatorId,
+          circle: operatorCircle.circle,
+        })
+      }
+    >
+      <View style={styles.cardTop}>
+        <View style={styles.priceBadge}>
+          <Text style={styles.priceBadgeText}>₹{pack.price}</Text>
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <InlineInfo validity={pack.validity} data={pack.data} />
+          {!!pack.description && <Text style={styles.desc} numberOfLines={3}>{pack.description}</Text>}
+        </View>
+        <MaterialIcons name="chevron-right" size={22} color={COLORS.subtext} />
+      </View>
+
+      {/* tiny tag showing where it came from when searching globally */}
+      {!!query.trim() && !!pack._cat && (
+        <View style={styles.catTag}>
+          <Text style={styles.catTagText}>{pack._cat}</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+
+  const SkeletonCard = () => (
+    <View style={styles.planCard}>
+      <View style={styles.cardTop}>
+        <View style={[styles.priceBadge, { backgroundColor: "#EEE" }]}>
+          <View style={{ width: 48, height: 16, backgroundColor: "#E6E6E6", borderRadius: 6 }} />
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <View style={{ height: 14, backgroundColor: "#EEE", borderRadius: 6, marginBottom: 6 }} />
+          <View style={{ height: 12, backgroundColor: "#EEE", borderRadius: 6, width: "70%" }} />
+        </View>
+      </View>
+    </View>
+  );
+
+  return (
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+    
+      
+      {/* Move OperatorPopup OUTSIDE TouchableWithoutFeedback */}
+      <OperatorPopup
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onSelectOperator={(op) => {
+          setModalVisible(false);
+          resetPlans();
+          if (op?.operator) {
+            setSelectedOperator({ operator: op.operator, circle: op.circle });
+          }
+          if (op?.operatorLogo) setSelectedLogo(op.operatorLogo);
+          if (op?.operatorId) setOperatorId(op.operatorId);
+          if (op?.circleId) setCircleId(op.circleId);
+
+          if (op?.operatorId && op?.circleId) {
+            fetchPlans(op.operatorId, op.circleId);
+          }
+        }}
+      />
+      
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.screen}>
+          {/* ----- Premium Header card (SIM/number) ----- */}
+          <View style={styles.headerCard}>
+            <View style={styles.headerGradient}>
+              <View style={styles.headerLeft}>
+                <View style={styles.logoWrapper}>
+                  <Image source={selectedOperatorImage} style={styles.logo} />
+                </View>
+                <View style={styles.headerInfo}>
+                  <Text style={styles.operatorName}>{operatorCircle?.operator || "Select Operator"}</Text>
+                  {contactNumber ? (
+                    <View style={styles.numberRow}>
+                      <MaterialIcons name="phone-android" size={isSmallDevice ? 12 : 14} color={COLORS.primary} />
+                      <Text style={styles.number}>{contactNumber}</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.numberRow}>
+                      <MaterialIcons name="touch-app" size={isSmallDevice ? 12 : 14} color={COLORS.subtext} />
+                      <Text style={[styles.number, { color: COLORS.subtext }]}>Tap Change to select</Text>
+                    </View>
+                  )}
+                  {operatorCircle?.circle && (
+                    <View style={styles.circleRow}>
+                      <Ionicons name="location-outline" size={isSmallDevice ? 10 : 12} color={COLORS.subtext} />
+                      <Text style={styles.circleText}>{operatorCircle.circle}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+              <TouchableOpacity 
+                onPress={() => {
+                  // console.log("Change button pressed, setting modalVisible to true");
+                  setModalVisible(true);
+                }} 
+                style={styles.changeBtn} 
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="swap-horiz" size={isSmallDevice ? 14 : 16} color={COLORS.secondary} />
+                <Text style={styles.changeText}>Change</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* ----- Modern Search Bar ----- */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchIconWrap}>
+              <Ionicons name="search" size={isSmallDevice ? 16 : 18} color={COLORS.primary} />
+            </View>
+            <TextInput
+              ref={searchRef}
+              style={styles.searchInput}
+              placeholder="Search plans by amount (e.g., 349)"
+              placeholderTextColor={COLORS.subtext}
+              value={query}
+              onChangeText={(t) => {
+                setQuery(t);
+                if (searchRef.current) {
+                  searchRef.current.isFocused?.() || searchRef.current.focus?.();
+                }
+              }}
+              keyboardType={Platform.OS === "ios" ? "number-pad" : "numeric"}
+              inputMode="numeric"
+              returnKeyType="search"
+              blurOnSubmit={false}
+            />
+            {query ? (
+              <TouchableOpacity onPress={() => setQuery("")} style={styles.clearBtn} accessibilityLabel="Clear search">
+                <Ionicons name="close-circle" size={20} color={COLORS.subtext} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          {/* Search results summary */}
+          {!!searchSummary && (
+            <View style={styles.searchHint}>
+              <View style={styles.searchHintIcon}>
+                <Ionicons name="search" size={14} color={COLORS.primary} />
+              </View>
+              <Text style={styles.searchHintText}>
+                Found <Text style={styles.searchHintBold}>{searchSummary.count}</Text> plan{searchSummary.count === 1 ? "" : "s"} across{" "}
+                <Text style={styles.searchHintBold}>{searchSummary.catCount}</Text> categor{searchSummary.catCount === 1 ? "y" : "ies"}
+              </Text>
+            </View>
+          )}
+
+          {/* ----- Category Tabs with animated underline ----- */}
+          <View style={styles.tabsWrap}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.tabsScroll}
+              keyboardShouldPersistTaps="handled"
+            >
+              {categories.map((c) => (
+                <TabChip key={c} category={c} />
+              ))}
+              <Animated.View
+                style={[
+                  styles.underline,
+                  { transform: [{ translateX: underlineX }], width: underlineW },
+                ]}
+              />
+            </ScrollView>
+          </View>
+
+          {/* ----- Plans List ----- */}
+          <FlatList
+            data={filteredPack}
+            keyExtractor={(item) => String(item.planId)}
+            renderItem={({ item }) => <PlanCard pack={item} />}
+            ListEmptyComponent={
+              loading ? (
+                <View style={styles.skeletonContainer}>
+                  {[...Array(4)].map((_, i) => (
+                    <SkeletonCard key={i} />
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyWrap}>
+                  <View style={styles.emptyIcon}>
+                    <MaterialCommunityIcons name="package-variant" size={40} color={COLORS.primary} />
+                  </View>
+                  <Text style={styles.emptyTitle}>
+                    {selectedCat
+                      ? query.trim()
+                        ? "No matching plans"
+                        : "No plans available"
+                      : "Select a category"}
+                  </Text>
+                  <Text style={styles.emptySubtext}>
+                    {selectedCat
+                      ? query.trim()
+                        ? "Try searching with a different amount"
+                        : "No plans found in this category"
+                      : "Choose a category above to view plans"}
+                  </Text>
+                </View>
+              )
+            }
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />
+            }
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          />
+
+          {/* Floating loader indicator */}
+          {loading && (
+            <View style={styles.floatingLoader}>
+              <ActivityIndicator size="small" color="#FFF" />
+            </View>
+          )}
+        </View>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
+  );
+};
+
+/* ---------------- Styles ---------------- */
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: COLORS.bg },
+
+  /* Header Card - Premium Design */
+  headerCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 20,
+    backgroundColor: COLORS.cardBg,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+    overflow: "hidden",
+  },
+  headerGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    backgroundColor: COLORS.cardBg,
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  logoWrapper: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: COLORS.primaryLight,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 14,
+  },
+  logo: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: 10,
+    resizeMode: "contain",
+  },
+  headerInfo: {
+    flex: 1,
+  },
+  operatorName: { 
+    fontSize: 17, 
+    fontWeight: "700", 
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  numberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 3,
+  },
+  number: { 
+    fontSize: 14, 
+    fontWeight: "600", 
+    color: COLORS.text,
+    marginLeft: 4,
+  },
+  circleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  circleText: { 
+    fontSize: 12, 
+    color: COLORS.subtext,
+    marginLeft: 3,
+  },
+  changeBtn: { 
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.primary, 
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 4,
+  },
+  changeText: { 
+    fontSize: 13, 
+    color: "#FFF", 
+    fontWeight: "700",
+  },
+
+  /* Search Bar - Modern */
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.cardBg,
+    marginHorizontal: 16,
+    marginTop: 14,
+    paddingHorizontal: 4,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    shadowColor: "#000",
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  searchIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: COLORS.primaryLight,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 8,
+  },
+  searchInput: { 
+    flex: 1, 
+    fontSize: 15, 
+    color: COLORS.text, 
+    paddingVertical: 0,
+    fontWeight: "500",
+  },
+  clearBtn: {
+    padding: 8,
+  },
+
+  /* Search Hint */
+  searchHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.primaryLight,
+    marginTop: 10,
+    marginHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.primary + "20",
+  },
+  searchHintIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: COLORS.primary + "15",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+  },
+  searchHintText: { 
+    color: COLORS.text, 
+    fontSize: 13, 
+    fontWeight: "500",
+  },
+  searchHintBold: {
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+
+  /* Category Tabs */
+  tabsWrap: {
+    marginTop: 14,
+    paddingBottom: 6,
+  },
+  tabsScroll: {
+    paddingHorizontal: 16,
+    gap: 10,
+    position: "relative",
+  },
+  tabBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: COLORS.cardBg,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+  },
+  tabBtnActive: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: COLORS.primary,
+  },
+  tabText: { 
+    fontSize: 13, 
+    color: COLORS.subtext, 
+    fontWeight: "600",
+  },
+  tabTextActive: { 
+    color: COLORS.primary,
+    fontWeight: "700",
+  },
+  underline: {
+    position: "absolute",
+    height: 3,
+    backgroundColor: COLORS.primary,
+    bottom: 0,
+    left: 16,
+    borderRadius: 2,
+  },
+
+  /* Plan Cards */
+  listContent: {
+    paddingBottom: 80,
+    paddingTop: 6,
+  },
+  skeletonContainer: {
+    paddingHorizontal: 16,
+  },
+  planCard: {
+    backgroundColor: COLORS.cardBg,
+    padding: 16,
+    borderRadius: 18,
+    marginHorizontal: 16,
+    marginVertical: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  cardTop: { 
+    flexDirection: "row", 
+    alignItems: "flex-start",
+  },
+
+  priceBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: COLORS.primaryLight,
+    alignSelf: "flex-start",
+    minWidth: 70,
+    alignItems: "center",
+  },
+  priceBadgeText: { fontSize: 18, fontWeight: "800", color: COLORS.primary },
+
+  inlineInfo: {
+    fontSize: 13,
+    color: COLORS.text,
+    fontWeight: "500",
+    flexShrink: 1,
+    lineHeight: 20,
+  },
+  inlineLabel: {
+    color: COLORS.subtext,
+    fontWeight: "500",
+  },
+  inlineValue: {
+    color: COLORS.text,
+    fontWeight: "700",
+  },
+
+  desc: { fontSize: 12, color: COLORS.subtext, lineHeight: 18, marginTop: 8 },
+
+  catTag: {
+    alignSelf: "flex-start",
+    marginTop: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: COLORS.primaryLight,
+  },
+  catTagText: { fontSize: 11, fontWeight: "700", color: COLORS.primary },
+
+  /* Empty State */
+  emptyWrap: { 
+    alignItems: "center", 
+    justifyContent: "center", 
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.primaryLight,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  emptyTitle: { 
+    fontSize: 17,
+    fontWeight: "700",
+    color: COLORS.text, 
+    marginBottom: 6,
+  },
+  emptySubtext: {
+    fontSize: 13,
+    color: COLORS.subtext,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+
+  /* Floating Loader */
+  floatingLoader: {
+    position: "absolute",
+    right: 20,
+    bottom: 24,
+    backgroundColor: COLORS.primary,
+    borderRadius: 24,
+    width: 48,
+    height: 48,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+});
+
+export default RechargeScreen;

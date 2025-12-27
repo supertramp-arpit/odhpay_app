@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "ODH_PAY",
+    "slug": "ODH_PAY",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/odh.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/odh.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/odh.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.ODHPAY_PROJ.com"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-video",
+      "expo-secure-store"
+    ]
+  }
+}
