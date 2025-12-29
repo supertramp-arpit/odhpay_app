@@ -11,6 +11,7 @@ import {
   Alert,
   Linking,
   PermissionsAndroid,
+  ToastAndroid,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -20,6 +21,8 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import { Buffer } from "buffer";
+import RNFS from "react-native-fs";
+import Share from "react-native-share";
 
 const COLORS = {
   primary: Theme?.colors?.primary || "#5F259F",
@@ -361,35 +364,14 @@ const History = () => {
       const buffer = Buffer.from(new Uint8Array(data));
       const base64 = buffer.toString("base64");
 
-      const { uri: fileUri, publicLocation } = await saveReceiptFile(base64, reference_id);
+      // Save to Downloads folder and open PDF
+      const filePath = await saveToDownloadsAndOpen(base64, reference_id);
 
-      const info = await FileSystem.getInfoAsync(fileUri);
-      if (!info.exists || !info.size) {
-        throw new Error("Receipt file not found or empty after save");
+      if (Platform.OS === "android") {
+        ToastAndroid.show(`Receipt saved to Downloads`, ToastAndroid.SHORT);
       }
 
-      const openUrl =
-        Platform.OS === "android" && !publicLocation
-          ? await FileSystem.getContentUriAsync(fileUri)
-          : fileUri;
-
-      console.log("Opening receipt uri:", openUrl, "public:", publicLocation);
-
-      try {
-        await Linking.openURL(openUrl);
-      } catch (linkErr) {
-        console.log("Linking open failed:", linkErr?.message);
-        Alert.alert("Receipt saved", `Saved to: ${fileUri}`);
-      }
-
-      console.log(
-        "Receipt saved to:",
-        fileUri,
-        "size:",
-        info.size || 0,
-        "public:",
-        publicLocation
-      );
+      console.log("Receipt saved to:", filePath);
     } catch (err) {
       console.log("downloadReceipt err:", err?.message);
       Alert.alert("Download failed", "Unable to download receipt. Please try again.");
@@ -401,8 +383,13 @@ const History = () => {
   const ensureStoragePermission = async () => {
     if (Platform.OS !== "android") return true;
 
-    if (Platform.Version >= 30) return true;
+    // For Android 13+ (API 33+), no storage permission needed for app's own files
+    if (Platform.Version >= 33) return true;
 
+    // For Android 10-12 (API 29-32), use scoped storage - no permission needed for Downloads
+    if (Platform.Version >= 29) return true;
+
+    // For older Android versions, request WRITE_EXTERNAL_STORAGE
     const perm = PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE;
     const has = await PermissionsAndroid.check(perm);
     if (has) return true;
@@ -411,32 +398,62 @@ const History = () => {
     return res === PermissionsAndroid.RESULTS.GRANTED;
   };
 
-  const saveReceiptFile = async (base64, referenceId) => {
-    const filename = `receipt-${referenceId}.pdf`;
+  const saveToDownloadsAndOpen = async (base64, referenceId) => {
+    const filename = `ODHPay_Receipt_${referenceId}.pdf`;
+    let filePath;
 
-    if (Platform.OS === "android" && FileSystem.StorageAccessFramework) {
+    if (Platform.OS === "android") {
+      // Save directly to Downloads folder using react-native-fs
+      const downloadsPath = RNFS.DownloadDirectoryPath;
+      filePath = `${downloadsPath}/${filename}`;
+
+      // Write the file
+      await RNFS.writeFile(filePath, base64, "base64");
+
+      // Verify file exists
+      const exists = await RNFS.exists(filePath);
+      if (!exists) {
+        throw new Error("Failed to save file to Downloads");
+      }
+
+      // Open PDF with default viewer using react-native-share
       try {
-        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-        if (permissions.granted) {
-          const safUri = await FileSystem.StorageAccessFramework.createFileAsync(
-            permissions.directoryUri,
-            filename,
-            "application/pdf"
-          );
-          await FileSystem.writeAsStringAsync(safUri, base64, { encoding: "base64" });
-          return { uri: safUri, publicLocation: true };
+        await Share.open({
+          url: `file://${filePath}`,
+          type: "application/pdf",
+          title: "Open Receipt",
+          showAppsToView: true,
+        });
+      } catch (openErr) {
+        // User cancelled the share dialog or no app available
+        if (openErr?.message !== "User did not share") {
+          console.log("Share open failed:", openErr?.message);
         }
+        // File is already saved, so this is fine
+        Alert.alert(
+          "Receipt Downloaded ✓",
+          `Receipt saved to Downloads folder as:\n${filename}\n\nYou can open it from your file manager.`,
+          [{ text: "OK" }]
+        );
+      }
+    } else {
+      // iOS: Save to documents and share
+      const baseDir = FileSystem.documentDirectory;
+      filePath = `${baseDir}${filename}`;
+      await FileSystem.writeAsStringAsync(filePath, base64, { encoding: "base64" });
+
+      // Open the file using share
+      try {
+        await Share.open({
+          url: filePath,
+          type: "application/pdf",
+        });
       } catch (err) {
-        console.log("SAF save failed, falling back to app storage:", err?.message);
+        console.log("iOS share failed:", err?.message);
       }
     }
 
-    const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
-    const dir = `${baseDir}receipts/`;
-    await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {});
-    const fileUri = `${dir}${filename}`;
-    await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: "base64" });
-    return { uri: fileUri, publicLocation: false };
+    return filePath;
   };
 
   return (
@@ -725,7 +742,7 @@ const History = () => {
         }
       />
 
-      <View style={{ height: 30 }}/>
+      <View style={{ height: 30 }} />
 
       {/* Date Picker - From Date */}
       {showFromDatePicker && (

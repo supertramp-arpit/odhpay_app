@@ -29,8 +29,8 @@ const VehicleRegistration = () => {
 
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertMessage, setAlertMessage] = useState("");
-  const[messageType,setMessageType]=useState("error");
-  const [messageTitle,setMessageTitle]=useState("Bill Fetch Failed");
+  const [messageType, setMessageType] = useState("error");
+  const [messageTitle, setMessageTitle] = useState("Bill Fetch Failed");
 
 
   // =====================================================
@@ -166,10 +166,21 @@ const VehicleRegistration = () => {
 
       setLoading(false);
 
+      // Transform array into object with infoName as key and infoValue as value
+      const additionalInfoArray = response?.data?.data?.additional_info?.info;
+      const infoData = Array.isArray(additionalInfoArray)
+        ? additionalInfoArray.reduce((acc, curElm) => {
+          acc[curElm["infoName"]] = curElm["infoValue"];
+          return acc;
+        }, {})
+        : {};
+
+      console.log("this is info --->infoData", infoData)
+
       const fetchedData = response?.data?.data || response?.data || {};
 
 
-      if(response?.data?.data?.error_message){
+      if (response?.data?.data?.error_message) {
         fetchedData.success = false;
         setAlertMessage(response?.data?.data?.error_message);
         setAlertVisible(true);
@@ -197,6 +208,8 @@ const VehicleRegistration = () => {
           amount_options: fetchedData?.amount_options,
         };
 
+        console.log("this is EnterBillAmount", EnterBillAmountData)
+
 
         console.log("Navigating with doesSupportUserInput:", doesSupportUserInput, "doesSupportEnterBillAmount:", doesSupportEnterBillAmount);
 
@@ -205,7 +218,7 @@ const VehicleRegistration = () => {
             data: fetchedData,
             paymentBnak,
             tagName,
-            IsAmountEditable:true,
+            IsAmountEditable: true,
             biller_id,
             urlData,
             billerfetchId: fetchedData["fetch_id"],
@@ -213,6 +226,7 @@ const VehicleRegistration = () => {
             billerCategory,
             billerName,
             paymentChannels,
+            infoData,
           });
         } else {
           // Default to BillConfirmation when bill fetch succeeds
@@ -220,7 +234,7 @@ const VehicleRegistration = () => {
             data: EnterBillAmountData,
             paymentBnak,
             tagName,
-            IsAmountEditable:false,
+            IsAmountEditable: false,
             biller_id,
             urlData,
             billerfetchId: fetchedData["fetch_id"],
@@ -228,24 +242,26 @@ const VehicleRegistration = () => {
             billerCategory,
             billerName,
             paymentChannels,
+            infoData,
           });
         }
       } else {
 
         console.log("Bill fetch failed:", fetchedData?.error_message || "Unable to fetch bill.");
-         navigation.navigate("BillConfirmation", {
-            data: EnterBillAmountData,
-            paymentBnak,
-            tagName,
-            IsAmountEditable:false,
-            biller_id,
-            urlData,
-            billerfetchId: fetchedData["fetch_id"],
-            iconImage,
-            billerCategory,
-            billerName,
-            paymentChannels,
-          });
+        navigation.navigate("BillConfirmation", {
+          data: EnterBillAmountData,
+          paymentBnak,
+          tagName,
+          IsAmountEditable: false,
+          biller_id,
+          urlData,
+          billerfetchId: fetchedData["fetch_id"],
+          iconImage,
+          billerCategory,
+          billerName,
+          paymentChannels,
+          infoData,
+        });
         // setAlertMessage(fetchedData?.error_message || "Unable to fetch bill.");
         // setAlertVisible(true);
       }

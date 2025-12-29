@@ -35,11 +35,13 @@ const BillFetch = () => {
     urlData = "",
     iconImage = "",
     paymentChannels = [],
+    infoData = {},
   } = route.params || {};
 
 
   const additionalInfoList = data?.additional_info?.info || [];
   console.log("BillFetch - additionalInfoList:", additionalInfoList);
+  console.log("BillFetch - infoData:", infoData);
 
 
   const amounts = ["500", "1000", "2000", "3000"];
@@ -78,7 +80,10 @@ const BillFetch = () => {
     { label: "Due Date", value: data?.due_date },
   ];
 
-
+  // Convert infoData object to array format for display
+  const infoDataArray = infoData && Object.keys(infoData).length > 0
+    ? Object.entries(infoData).map(([key, value]) => ({ label: key, value: value }))
+    : [];
 
   const filteredBillDetails = [
     ...baseDetails,
@@ -86,6 +91,7 @@ const BillFetch = () => {
       label: item?.infoName || "",
       value: item?.infoValue,
     })),
+    ...infoDataArray,
   ].filter(
     (item) =>
       item.value !== "NA" &&
@@ -113,7 +119,7 @@ const BillFetch = () => {
   // } else {
   //   minAmount = null;
   // };
-   let minAmount= paymentChannels?.[0]?.minAmount ? parseFloat(paymentChannels[0].minAmount) : null;
+  let minAmount = paymentChannels?.[0]?.minAmount ? parseFloat(paymentChannels[0].minAmount) : null;
   let maxAmount = paymentChannels?.[0]?.maxAmount ? parseFloat(paymentChannels[0].maxAmount) : null;
 
 

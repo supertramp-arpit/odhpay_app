@@ -21,7 +21,9 @@ const BillFetch2 = () => {
   const navigation = useNavigation();
   // Get data from route data or use default values
   const route = useRoute();
-  const { data, paymentBnak, tagName, biller_id, billerCategory, billerName, paymentChannels = [], activeGateway = "" } = route.params || {};
+  const { data, paymentBnak, tagName, biller_id, billerCategory, billerName, paymentChannels = [], activeGateway = "", infoData = {} } = route.params || {};
+
+  console.log("BillConfirmation - infoData:", infoData);
 
 
 
@@ -83,8 +85,13 @@ const BillFetch2 = () => {
 
 
 
-      // Build BBPS-specific payload with all required fields
+      // Build BBPS-specific 
+      // payload with all required fields
       const bbpsPayload = {
+
+
+        amount: billDetails.totalAmount,
+        purpose: "bbps_payment",
 
         bbps_data: {
           biller_id: biller_id,
@@ -93,10 +100,10 @@ const BillFetch2 = () => {
           customer_params: {},
           service_type: 'BBPS',
           purpose: `${tagName} Payment`,
-          fetch_reference_id: billDetails.billNumber || '',
+          fetch_reference_id: billDetails.referenceNo || '',
           bill_info: {
             bill_amount: billDetails.totalAmount,
-            bill_number: billDetails.referenceNo,
+            bill_number: billDetails.billNumber,
             bill_date: data?.bill_date,
             due_date: data?.due_date,
             customer_name: billDetails?.customerName || "",
@@ -167,7 +174,7 @@ const BillFetch2 = () => {
               <Text style={styles.billDetailsTitle}>Bill Details:</Text>
             </View>
 
-            {billDetails.customerName !== "N/A" && (
+            {billDetails.customerName !== "N/A" || "NA" && (
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Customer Name</Text>
                 <Text style={styles.detailValue}>{billDetails.customerName}</Text>
@@ -188,7 +195,19 @@ const BillFetch2 = () => {
               </View>
             )}
 
-           
+            {/* Additional Info from infoData */}
+            {infoData && Object.keys(infoData).length > 0 && (
+              <>
+                {Object.entries(infoData).map(([key, value], index) => (
+                  <View style={styles.detailRow} key={index}>
+                    <Text style={styles.detailLabel}>{key}</Text>
+                    <Text style={styles.detailValue}>{value}</Text>
+                  </View>
+                ))}
+              </>
+            )}
+
+
           </View>
 
           {/* Amount Display */}
@@ -201,7 +220,7 @@ const BillFetch2 = () => {
             <Text style={styles.dueDate}>Due Date: {billDetails.dueDate}</Text>
           )}
 
-          
+
           {/* Note */}
           <View style={styles.noteContainer}>
             <View style={styles.noteLine} />
@@ -358,7 +377,7 @@ const styles = StyleSheet.create({
   },
 
 
-   detailRow: {
+  detailRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 12,
