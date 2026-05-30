@@ -245,6 +245,10 @@ const FAST = () => {
     const billerInfo =
       result?.find((val) => val.blr_id === item.id) || {};
 
+    const initials = (item?.name || billerInfo?.blr_name || "BL")
+      .trim()
+      .substring(0, 2)
+      .toUpperCase();
 
     return (
       <TouchableOpacity
