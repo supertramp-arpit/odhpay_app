@@ -14,7 +14,8 @@ import {
   Button,
   Linking,
 } from "react-native";
-import { MaterialIcons } from "@expo/vector-icons";
+import { MaterialIcons, Ionicons, FontAwesome5 } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useCameraPermissions } from "expo-camera";
@@ -376,68 +377,122 @@ const HomeScreen = () => {
 
 
 
-      {
-        (user?.aadharKycStatus !== "verified" && user?.panKycStatus !== "verified") && (
-          <TouchableOpacity
-            onPress={handlekyc}
-            style={styles.kycButton}
-          >
-
-            <Text style={styles.kycText}>Your KYC Is Pending</Text>
-
-          </TouchableOpacity>
-
-        )
-      }
-
-
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: Math.max(safeTop, 8),
-          },
-        ]}
-      >
-        <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={() => navigation.navigate("UserProfileScreen")}>
-            <Image
-              // source={require("../assets/Profilee.png")}
-              source={profileSource}
-              style={styles.profileImage}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.addressContainer}>
-            <Text style={styles.addressText}>{payload?.MobileNumber || "Loading..."}</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.headerRight}>
-          <View style={styles.headerRightIcons}>
-            <TouchableOpacity onPress={() => navigation.navigate("NotificationScreen")}>
-              <MaterialIcons
-                name="notifications"
-                size={24}
-                color={Theme.colors.secondary}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => navigation.navigate("HelpSupport")}>
-              <MaterialIcons
-                name="help-outline"
-                size={24}
-                color={Theme.colors.secondary}
-              />
-            </TouchableOpacity>
-
-          </View>
-        </View>
-      </View>
-
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 90 }}
+        contentContainerStyle={{ paddingBottom: 90, backgroundColor: "#FFFFFF" }}
         showsVerticalScrollIndicator={false}
         bounces={true}
+        stickyHeaderIndices={[1]}
       >
+      <LinearGradient
+        colors={["#000000", "#000000"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={[
+          styles.heroWrap,
+          { paddingTop: Math.max(safeTop, 8) + 6 },
+        ]}
+      >
+        {/* Concentric wave rings behind the card */}
+        <View pointerEvents="none" style={[styles.ring, styles.ring3]} />
+        <View pointerEvents="none" style={[styles.ring, styles.ring2]} />
+        <View pointerEvents="none" style={[styles.ring, styles.ring1]} />
+
+        {(user?.aadharKycStatus !== "verified" && user?.panKycStatus !== "verified") && (
+          <TouchableOpacity onPress={handlekyc} style={styles.kycPill} activeOpacity={0.8}>
+            <MaterialIcons name="info-outline" size={13} color="#7A1B1B" />
+            <Text style={styles.kycPillText}>Your KYC Is Pending</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Top bar */}
+        <View style={styles.heroTopBar}>
+          <View style={styles.heroTopLeft}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("NotificationScreen")}
+              activeOpacity={0.8}
+            >
+              <View style={styles.avatarWrap}>
+                <Image source={profileSource} style={styles.avatarImg} />
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>+9</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+            <View style={{ marginLeft: 10, flexShrink: 1 }}>
+              <TouchableOpacity
+                style={styles.balanceRow}
+                onPress={() => {
+                  payload?.TransactionPIN
+                    ? navigation.navigate("checkWallet")
+                    : navigation.navigate("TransactionPin");
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.balanceText}>
+                  Balance: ₹{payload?.balance ?? payload?.MainBalance ?? 0}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color="#FFFFFF" />
+              </TouchableOpacity>
+              <Text style={styles.upiIdText} numberOfLines={1}>
+                UPI ID: {payload?.MobileNumber || "—"}@odh
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.heroTopRight}>
+            <TouchableOpacity
+              style={styles.heroIconBtn}
+              onPress={() => navigation.navigate("AllServicesScreen")}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="search" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.heroIconBtn}
+              onPress={() => navigation.navigate("ScratchCardScreen")}
+              activeOpacity={0.7}
+            >
+              <FontAwesome5 name="trophy" size={17} color="#FFD54A" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Hero headline */}
+        <Text style={styles.heroTitle}>Earn Real Cashback</Text>
+
+        {/* Card illustration with floating coins */}
+        <View style={styles.heroCardStage}>
+          <View style={[styles.coin, styles.coinA]} />
+          <View style={[styles.coin, styles.coinB]} />
+          <View style={[styles.coin, styles.coinC]} />
+          <View style={[styles.coin, styles.coinD]} />
+          <View style={[styles.coin, styles.coinE]} />
+
+          <LinearGradient
+            colors={["#0B3D2C", "#1E5C42", "#0F4A36"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroCard}
+          >
+            <LinearGradient
+              colors={["rgba(255,255,255,0.18)", "rgba(255,255,255,0)"]}
+              style={styles.heroCardSheen}
+              pointerEvents="none"
+            />
+            <View style={styles.heroCardTop}>
+              <Text style={styles.heroCardBrand}>ODH Pay</Text>
+              <View style={styles.heroCardLogoDot} />
+            </View>
+            <View style={styles.heroCardChip}>
+              <View style={styles.heroCardChipLine} />
+              <View style={styles.heroCardChipLine} />
+            </View>
+            <Text style={styles.heroCardNumber}>•••• •••• •••• 8501</Text>
+          </LinearGradient>
+        </View>
+      </LinearGradient>
+
+      <View style={styles.stickyTopPanel}>
         <View style={styles.moneyTransfersContainer}>
           <View style={styles.moneyTransfers}>
             <TouchableOpacity
@@ -507,6 +562,7 @@ const HomeScreen = () => {
             </View>
           </View>
         </View>
+      </View>
 
         <View style={styles.bannerScrollContainer}>
           <Animated.ScrollView
@@ -819,8 +875,269 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Theme.colors.primary,
+    backgroundColor: "#FFFFFF",
   },
+
+  // ===== Sticky white panel (overlaps the hero, sticks on scroll) =====
+  stickyTopPanel: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    marginTop: -32,
+    paddingTop: 14,
+    paddingBottom: 6,
+    zIndex: 10,
+    elevation: 6,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+  },
+
+  // KYC alert chip (renders inside the blue hero when pending)
+  kycPill: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFE3E3",
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    marginBottom: 8,
+  },
+  kycPillText: {
+    color: "#7A1B1B",
+    fontSize: 11,
+    fontWeight: "700",
+    marginLeft: 5,
+    textDecorationLine: "underline",
+  },
+
+  // ===== Blue hero =====
+  heroWrap: {
+    paddingHorizontal: horizontalGutter,
+    paddingBottom: 36,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: "hidden",
+    position: "relative",
+  },
+  heroSheen: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 160,
+  },
+  ring: {
+    position: "absolute",
+    borderRadius: 9999,
+    borderWidth: 1,
+    alignSelf: "center",
+  },
+  ring1: {
+    width: 260,
+    height: 260,
+    top: 130,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+  ring2: {
+    width: 360,
+    height: 360,
+    top: 80,
+    borderColor: "rgba(255,255,255,0.07)",
+  },
+  ring3: {
+    width: 460,
+    height: 460,
+    top: 30,
+    borderColor: "rgba(255,255,255,0.04)",
+  },
+  heroTopBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingBottom: 8,
+  },
+  heroTopLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 1,
+  },
+  avatarWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.35)",
+    position: "relative",
+  },
+  avatarImg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  notifBadge: {
+    position: "absolute",
+    top: -4,
+    right: -6,
+    backgroundColor: "#FF3D4D",
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    minWidth: 22,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: "#000000",
+  },
+  notifBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+  },
+  balanceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  balanceText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+    marginRight: 4,
+  },
+  upiIdText: {
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 11,
+    marginTop: 1,
+  },
+  heroTopRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  heroIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+  },
+  heroTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    fontStyle: "italic",
+    color: "#5DEAFF",
+    textAlign: "center",
+    marginTop: 14,
+    marginBottom: 2,
+    letterSpacing: 0.3,
+    textShadowColor: "rgba(0,0,0,0.20)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+
+  // Card illustration stage
+  heroCardStage: {
+    height: 170,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+    position: "relative",
+  },
+  heroCard: {
+    width: 220,
+    height: 138,
+    borderRadius: 12,
+    padding: 14,
+    transform: [{ rotate: "-6deg" }],
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.32,
+    shadowRadius: 14,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+  },
+  heroCardSheen: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 70,
+  },
+  heroCardTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  heroCardBrand: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  heroCardLogoDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#FFC107",
+    shadowColor: "#FFC107",
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+  },
+  heroCardChip: {
+    width: 32,
+    height: 24,
+    borderRadius: 5,
+    backgroundColor: "#D4A613",
+    marginTop: 22,
+    paddingHorizontal: 4,
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  heroCardChipLine: {
+    height: 1.5,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    marginVertical: 2,
+  },
+  heroCardNumber: {
+    color: "rgba(255,255,255,0.92)",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 1.4,
+    marginTop: 14,
+  },
+
+  // Coins
+  coin: {
+    position: "absolute",
+    backgroundColor: "#F6CB45",
+    borderWidth: 1.5,
+    borderColor: "#C49210",
+    borderRadius: 9999,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  coinA: { width: 18, height: 18, top: 12, left: "22%" },
+  coinB: { width: 14, height: 14, top: 36, right: "16%" },
+  coinC: { width: 22, height: 22, bottom: 18, left: "14%" },
+  coinD: { width: 16, height: 16, bottom: 4, right: "20%" },
+  coinE: { width: 12, height: 12, top: "50%", left: "8%" },
+
+  // Legacy header styles kept for backwards-compat with anything else referencing them
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
