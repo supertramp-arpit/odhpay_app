@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,15 +6,17 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  Image,
   Dimensions,
   Platform,
   StatusBar,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Theme from "../../components/Theme";
+import { apiRequest } from "../../utils/api";
 
 const { width, height } = Dimensions.get("window");
 const scale = width / 375;
@@ -24,59 +26,27 @@ const normalize = (size) => Math.round(size * Math.min(scale, 1.3));
 const wp = (percentage) => (width * percentage) / 100;
 const hp = (percentage) => (height * percentage) / 100;
 
-// Dummy Data
-const DUMMY_BANK_ACCOUNTS = [
-  {
-    id: "1",
-    name: "Rahul Sharma",
-    bank: "Axis Bank",
-    accountNo: "••••4521",
-    lastSent: "₹5,000",
-    date: "15 Dec 2024",
-    logo: "https://logo.clearbit.com/axisbank.com",
-    color: "#97144D",
-  },
-  {
-    id: "2",
-    name: "Priya Patel",
-    bank: "HDFC Bank",
-    accountNo: "••••8734",
-    lastSent: "₹12,500",
-    date: "10 Dec 2024",
-    logo: "https://logo.clearbit.com/hdfcbank.com",
-    color: "#004C8F",
-  },
-  {
-    id: "3",
-    name: "Amit Kumar",
-    bank: "State Bank of India",
-    accountNo: "••••2156",
-    lastSent: "₹3,200",
-    date: "05 Dec 2024",
-    logo: "https://logo.clearbit.com/sbi.co.in",
-    color: "#22409A",
-  },
-  {
-    id: "4",
-    name: "Sneha Gupta",
-    bank: "ICICI Bank",
-    accountNo: "••••6789",
-    lastSent: "₹8,750",
-    date: "01 Dec 2024",
-    logo: "https://logo.clearbit.com/icicibank.com",
-    color: "#F58220",
-  },
-  {
-    id: "5",
-    name: "Vikram Singh",
-    bank: "Kotak Mahindra",
-    accountNo: "••••3421",
-    lastSent: "₹15,000",
-    date: "28 Nov 2024",
-    logo: "https://logo.clearbit.com/kotak.com",
-    color: "#ED1C24",
-  },
-];
+// Bank type for this "send money to (a beneficiary's) bank account" screen.
+// "other" = saved beneficiaries; the To-Self screen uses "self".
+const BANK_TYPE = "other";
+
+const BANK_COLORS = ["#22409A", "#004C8F", "#F37920", "#97144D", "#ED1C24", "#0F9D58", "#6D28D9", "#0EA5E9"];
+
+// Deterministic color + initials so each saved bank renders consistently
+// without depending on an external logo service.
+const bankColorFor = (name = "") => {
+  let h = 0;
+  for (let i = 0; i < name.length; i += 1) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return BANK_COLORS[h % BANK_COLORS.length];
+};
+
+const bankInitials = (name = "") =>
+  name.trim().split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase() || "BK";
+
+const maskAccount = (acc = "") => {
+  const s = String(acc || "");
+  return s.length > 4 ? `••••${s.slice(-4)}` : s;
+};
 
 const DUMMY_UPI_IDS = [
   {
@@ -114,15 +84,62 @@ const TransferMoneyScreen = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState("Bank Accounts");
 
+  // Live beneficiary bank accounts (from the backend), replacing the old dummy list.
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+
+  const fetchBankAccounts = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+    try {
+      const res = await apiRequest({
+        method: "get",
+        endpoint: `payments/get_all_user_accounts?banktype=${BANK_TYPE}`,
+      });
+      const list = Array.isArray(res?.data) ? res.data : [];
+      setBankAccounts(
+        list.map((b) => ({
+          id: String(b.id),
+          regBankID: b.id, // used by /payments/withdraw_fund
+          name: b.bankACHolder || "Beneficiary",
+          bank: b.bankName || "Bank",
+          accountNo: maskAccount(b.bankACNumber),
+          accountNumber: b.bankACNumber,
+          ifsc: b.bankIFSC,
+          color: bankColorFor(b.bankName || b.bankACHolder || ""),
+          initials: bankInitials(b.bankName || b.bankACHolder || ""),
+        }))
+      );
+    } catch (e) {
+      setError("Couldn't load your bank accounts. Pull down to retry.");
+      setBankAccounts([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  // Refetch each time the screen gains focus (e.g. after adding a new bank).
+  useFocusEffect(
+    useCallback(() => {
+      fetchBankAccounts();
+    }, [fetchBankAccounts])
+  );
+
   const filteredData = useMemo(() => {
-    const data = selectedTab === "Bank Accounts" ? DUMMY_BANK_ACCOUNTS : DUMMY_UPI_IDS;
+    const data = selectedTab === "Bank Accounts" ? bankAccounts : DUMMY_UPI_IDS;
     if (!searchQuery.trim()) return data;
+    const q = searchQuery.toLowerCase();
     return data.filter((item) =>
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.bank?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (item.upi?.toLowerCase().includes(searchQuery.toLowerCase()))
+      item.name.toLowerCase().includes(q) ||
+      (item.bank?.toLowerCase().includes(q)) ||
+      (item.ifsc?.toLowerCase().includes(q)) ||
+      (item.upi?.toLowerCase().includes(q))
     );
-  }, [selectedTab, searchQuery]);
+  }, [selectedTab, searchQuery, bankAccounts]);
 
   const renderBankItem = ({ item, index }) => (
     <TouchableOpacity
@@ -131,13 +148,9 @@ const TransferMoneyScreen = () => {
       onPress={() => navigation.navigate("NewBank", { beneficiary: item })}
     >
       <View style={styles.bankCardContent}>
-        {/* Bank Logo */}
+        {/* Bank avatar (initials) */}
         <View style={[styles.bankLogoContainer, { backgroundColor: `${item.color}15` }]}>
-          <Image
-            source={{ uri: item.logo }}
-            style={styles.bankLogo}
-            defaultSource={require("../../assets/LogoN.png")}
-          />
+          <Text style={[styles.bankInitials, { color: item.color }]}>{item.initials}</Text>
         </View>
 
         {/* Details */}
@@ -150,13 +163,12 @@ const TransferMoneyScreen = () => {
             <View style={styles.dotSeparator} />
             <Text style={styles.accountNo}>{item.accountNo}</Text>
           </View>
-          <View style={styles.lastTransactionRow}>
-            <MaterialIcons name="history" size={normalize(12)} color="#10b981" />
-            <Text style={styles.lastSentText}>
-              Last sent <Text style={styles.amountText}>{item.lastSent}</Text>
-            </Text>
-            <Text style={styles.dateText}>• {item.date}</Text>
-          </View>
+          {item.ifsc ? (
+            <View style={styles.lastTransactionRow}>
+              <MaterialIcons name="account-balance" size={normalize(12)} color={Theme.colors.textSecondary} />
+              <Text style={styles.lastSentText}>IFSC {item.ifsc}</Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Arrow */}
@@ -203,25 +215,31 @@ const TransferMoneyScreen = () => {
     </TouchableOpacity>
   );
 
-  const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <View style={styles.emptyIconBox}>
-        <MaterialIcons
-          name={selectedTab === "Bank Accounts" ? "account-balance" : "qr-code"}
-          size={normalize(48)}
-          color={Theme.colors.primary}
-        />
+  const renderEmptyState = () => {
+    const isBank = selectedTab === "Bank Accounts";
+    const showError = isBank && !!error;
+    return (
+      <View style={styles.emptyContainer}>
+        <View style={styles.emptyIconBox}>
+          <MaterialIcons
+            name={showError ? "error-outline" : isBank ? "account-balance" : "qr-code"}
+            size={normalize(48)}
+            color={Theme.colors.primary}
+          />
+        </View>
+        <Text style={styles.emptyTitle}>
+          {showError ? "Couldn't load accounts" : `No ${isBank ? "Bank Accounts" : "UPI IDs"} Found`}
+        </Text>
+        <Text style={styles.emptySubtitle}>
+          {showError
+            ? error
+            : searchQuery
+            ? "Try searching with a different name"
+            : `Add a new ${isBank ? "bank account" : "UPI ID"} to start transferring money`}
+        </Text>
       </View>
-      <Text style={styles.emptyTitle}>
-        No {selectedTab === "Bank Accounts" ? "Bank Accounts" : "UPI IDs"} Found
-      </Text>
-      <Text style={styles.emptySubtitle}>
-        {searchQuery
-          ? "Try searching with a different name"
-          : `Add a new ${selectedTab === "Bank Accounts" ? "bank account" : "UPI ID"} to start transferring money`}
-      </Text>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
@@ -272,23 +290,42 @@ const TransferMoneyScreen = () => {
         })}
       </View>
 
-      {/* Recent Label */}
+      {/* Section Label */}
       {filteredData.length > 0 && (
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Beneficiaries</Text>
+          <Text style={styles.sectionTitle}>
+            {selectedTab === "Bank Accounts" ? "Saved Beneficiaries" : "Recent UPI IDs"}
+          </Text>
           <Text style={styles.sectionCount}>{filteredData.length}</Text>
         </View>
       )}
 
       {/* List */}
-      <FlatList
-        data={filteredData}
-        keyExtractor={(item) => item.id}
-        renderItem={selectedTab === "Bank Accounts" ? renderBankItem : renderUpiItem}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={renderEmptyState}
-      />
+      {selectedTab === "Bank Accounts" && loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Theme.colors.primary} />
+          <Text style={styles.loadingText}>Loading your bank accounts…</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredData}
+          keyExtractor={(item) => item.id}
+          renderItem={selectedTab === "Bank Accounts" ? renderBankItem : renderUpiItem}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={renderEmptyState}
+          refreshControl={
+            selectedTab === "Bank Accounts" ? (
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => fetchBankAccounts(true)}
+                tintColor={Theme.colors.primary}
+                colors={[Theme.colors.primary]}
+              />
+            ) : undefined
+          }
+        />
+      )}
 
       {/* FAB Button */}
       <TouchableOpacity
@@ -448,6 +485,21 @@ const styles = StyleSheet.create({
     width: normalize(32),
     height: normalize(32),
     borderRadius: normalize(6),
+  },
+  bankInitials: {
+    fontSize: normalize(18),
+    fontWeight: "800",
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: hp(12),
+    gap: normalize(12),
+  },
+  loadingText: {
+    fontSize: normalize(14),
+    color: Theme.colors.textSecondary,
   },
   bankDetails: {
     flex: 1,
