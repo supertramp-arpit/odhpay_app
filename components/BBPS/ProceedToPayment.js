@@ -15,6 +15,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import SweetAlert from "../miscellaneous/SweetAlert";
 import { useRegisterStore } from "../../store/useRegisterStore";
+import { logBBPSFlow } from "../../utils/apiLogger";
 
 // Operators database
 const ALL_OPERATORS = [
@@ -470,6 +471,8 @@ const ProceedToPayment = () => {
       });
 
 
+      logBBPSFlow("VALIDATE_BILL", { biller_id, input_params: req_payload });
+
       const response = await axios.post(
         'https://newapi.odhpay.com/api/v1/bbps/bill/validate',
         {
@@ -483,6 +486,8 @@ const ProceedToPayment = () => {
         input_params: req_payload,
       });
       console.log(`/api/v1/bbps/bill/validate response------>`, response?.data);
+
+      logBBPSFlow("VALIDATE_BILL", { valid: response?.data?.valid, message: response?.data?.message });
 
       
 

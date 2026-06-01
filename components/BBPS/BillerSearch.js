@@ -15,6 +15,7 @@ import axios from "axios";
 import CusomSpinner from "../miscellaneous/CustomSpinner";
 import Theme from "../Theme";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { logBBPSFlow } from "../../utils/apiLogger";
 
 const FAST = () => {
   const route = useRoute();
@@ -69,6 +70,8 @@ const FAST = () => {
         }
         return;
       }
+      logBBPSFlow("SEARCH_BILLERS", { category: endpoint, query, skip: nextSkip, limit });
+
       const response = await axios.get(
         "https://newapi.odhpay.com/api/v1/bbps/billers/search/fast",
         {
@@ -168,11 +171,15 @@ const FAST = () => {
   // ===========================================================================
   const FetchBillerConditions = async (Biller) => {
     try {
+      logBBPSFlow("SELECT_BILLER", { biller_id: Biller.blr_id, biller_name: Biller.blr_name });
+
       const access_token = await AsyncStorage.getItem("access_token");
       if (!access_token) {
         setError("Please sign in to view billers.");
         return;
       }
+
+      logBBPSFlow("GET_BILLER_INFO", { biller_id: Biller.blr_id });
 
       const response = await axios.get(
         `https://newapi.odhpay.com/api/v1/bbps/billers/ui-info/${Biller.blr_id}`,

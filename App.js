@@ -13,6 +13,16 @@ import Theme from "./components/Theme";
 import useInAppUpdate, { UpdateType } from "./hooks/useInAppUpdate";
 import UpdateModal from "./components/miscellaneous/UpdateModal";
 
+// Debug API Logger - logs all API calls in development
+import { setupApiLogger } from "./utils/apiLogger";
+import axios from "axios";
+
+// Initialize API logging (only in __DEV__ mode)
+if (__DEV__) {
+  setupApiLogger(axios);
+  console.log("🔧 Debug mode: API logging enabled");
+}
+
 // Global notification handler (once at module load)
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {

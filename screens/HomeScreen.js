@@ -34,14 +34,31 @@ const images = [
   require("../assets/promotion2.jpg"),
 ];
 
+const CATEGORY_ICONS = {
+  "Electricity": { icon: "bolt", color: "#FFC107", bg: "#FFF8E1" },
+  "Fastag": { icon: "directions-car", color: "#FF9800", bg: "#FFF3E0" },
+  "Mobile Postpaid": { icon: "phone-in-talk", color: "#2196F3", bg: "#E3F2FD" },
+  "Mobile Prepaid": { icon: "phone-android", color: "#10B981", bg: "#E8F5E9" },
+  "LPG Gas": { icon: "local-fire-department", color: "#F44336", bg: "#FFEBEE" },
+  "Gas": { icon: "fireplace", color: "#E91E63", bg: "#FCE4EC" },
+  "Water": { icon: "water-drop", color: "#03A9F4", bg: "#E1F5FE" },
+  "Credit Card": { icon: "credit-card", color: "#3F51B5", bg: "#E8EAF6" },
+  "Insurance": { icon: "health-and-safety", color: "#EF5350", bg: "#FFEBEE" },
+  "Loan Repayment": { icon: "payments", color: "#00BCD4", bg: "#E0F7FA" },
+  "DTH": { icon: "tv", color: "#9C27B0", bg: "#F3E5F5" },
+  "Broadband": { icon: "wifi", color: "#673AB7", bg: "#EDE7F6" },
+  "Landline Postpaid": { icon: "phone", color: "#9C27B0", bg: "#F3E5F5" },
+  "default": { icon: "receipt", color: "#607D8B", bg: "#ECEFF1" },
+};
+
 const { width } = Dimensions.get("window");
 const isSmallDevice = width < 360;
 const horizontalGutter = Math.max(12, width * 0.04);
 const baseFont = isSmallDevice ? 12 : 14;
 
 const HomeScreen = () => {
-
-
+  const [quickPayContacts, setQuickPayContacts] = useState([]);
+  const [quickPayLoading, setQuickPayLoading] = useState(false);
 
   const user = useUserStore(s => s.user);
   const { top: safeTop } = useSafeAreaInsets();
@@ -51,6 +68,45 @@ const HomeScreen = () => {
 
 
 
+
+  const fetchQuickPayContacts = useCallback(async () => {
+    try {
+      setQuickPayLoading(true);
+      const access_token = await AsyncStorage.getItem("access_token");
+      if (!access_token) return;
+
+      const categories = ["Electricity", "Fastag", "Mobile Postpaid", "LPG Gas", "Credit Card"];
+      const allContacts = [];
+
+      for (const category of categories) {
+        try {
+          const response = await axios.get(
+            "https://newapi.odhpay.com/v2/payments/bill-fetch/unique-consumers",
+            {
+              params: { category, skip: 0, limit: 3 },
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${access_token}`,
+              },
+            }
+          );
+          const data = response.data?.data;
+          const items = Array.isArray(data) ? data : (data?.results || data?.data || []);
+          items.forEach((item) => {
+            allContacts.push({ ...item, category });
+          });
+        } catch (e) {
+          // Skip failed category
+        }
+      }
+
+      setQuickPayContacts(allContacts.slice(0, 10));
+    } catch (error) {
+      console.log("QuickPay fetch error:", error);
+    } finally {
+      setQuickPayLoading(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -62,7 +118,8 @@ const HomeScreen = () => {
         useUserStore.getState().fetchUser().catch(() => { });
       }
       fetchKyc({ ttlMs: 10 * 60 * 1000 });
-    }, [fetchKyc])
+      fetchQuickPayContacts();
+    }, [fetchKyc, fetchQuickPayContacts])
   );
 
 
@@ -320,6 +377,61 @@ const HomeScreen = () => {
       ? { uri: correctPath(`https://newapi.odhpay.com/${payload?.profile}`) }
       : require("../assets/Profilee.png");
 
+  const handleQuickPayPress = (contact) => {
+    const iconInfo = CATEGORY_ICONS[contact.category] || CATEGORY_ICONS.default;
+    navigation.navigate("ServiceCategory", {
+      endpoint: contact.category,
+      name: contact.category,
+      btnName: `Pay ${contact.category}`,
+      reminder: `Pay ${contact.category}`,
+    });
+  };
+
+  const getContactInitials = (contact) => {
+    const name = contact.biller_name || contact.customer_name || contact.category || "";
+    const words = name.split(" ");
+    if (words.length >= 2) {
+      return (words[0][0] + words[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  const getContactDisplayName = (contact) => {
+    if (contact.customer_name) return contact.customer_name;
+    if (contact.biller_name) {
+      const parts = contact.biller_name.split(" ");
+      return parts.slice(0, 2).join(" ");
+    }
+    const inputParams = contact.input_params;
+    if (inputParams && typeof inputParams === "object") {
+      const firstValue = Object.values(inputParams)[0];
+      if (firstValue) return String(firstValue).substring(0, 12);
+    }
+    return contact.category;
+  };
+
+  const renderQuickPayItem = (contact, index) => {
+    const iconInfo = CATEGORY_ICONS[contact.category] || CATEGORY_ICONS.default;
+    return (
+      <TouchableOpacity
+        key={`quickpay-${index}`}
+        style={styles.quickPayItem}
+        onPress={() => handleQuickPayPress(contact)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.quickPayAvatar, { backgroundColor: iconInfo.bg }]}>
+          <MaterialIcons name={iconInfo.icon} size={22} color={iconInfo.color} />
+        </View>
+        <Text style={styles.quickPayName} numberOfLines={1}>
+          {getContactDisplayName(contact)}
+        </Text>
+        <Text style={styles.quickPayCategory} numberOfLines={1}>
+          {contact.category}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={styles.container} >
 
@@ -389,14 +501,9 @@ const HomeScreen = () => {
         end={{ x: 0, y: 1 }}
         style={[
           styles.heroWrap,
-          { paddingTop: Math.max(safeTop, 8) + 6 },
+          { paddingTop: Math.max(safeTop - 20, 8) },
         ]}
       >
-        {/* Concentric wave rings behind the card */}
-        <View pointerEvents="none" style={[styles.ring, styles.ring3]} />
-        <View pointerEvents="none" style={[styles.ring, styles.ring2]} />
-        <View pointerEvents="none" style={[styles.ring, styles.ring1]} />
-
         {(user?.aadharKycStatus !== "verified" && user?.panKycStatus !== "verified") && (
           <TouchableOpacity onPress={handlekyc} style={styles.kycPill} activeOpacity={0.8}>
             <MaterialIcons name="info-outline" size={13} color="#7A1B1B" />
@@ -457,112 +564,21 @@ const HomeScreen = () => {
           </View>
         </View>
 
-        {/* Hero headline */}
-        <Text style={styles.heroTitle}>Earn Real Cashback</Text>
 
-        {/* Card illustration with floating coins */}
-        <View style={styles.heroCardStage}>
-          <View style={[styles.coin, styles.coinA]} />
-          <View style={[styles.coin, styles.coinB]} />
-          <View style={[styles.coin, styles.coinC]} />
-          <View style={[styles.coin, styles.coinD]} />
-          <View style={[styles.coin, styles.coinE]} />
-
-          <LinearGradient
-            colors={["#0B3D2C", "#1E5C42", "#0F4A36"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.heroCard}
-          >
-            <LinearGradient
-              colors={["rgba(255,255,255,0.18)", "rgba(255,255,255,0)"]}
-              style={styles.heroCardSheen}
-              pointerEvents="none"
-            />
-            <View style={styles.heroCardTop}>
-              <Text style={styles.heroCardBrand}>ODH Pay</Text>
-              <View style={styles.heroCardLogoDot} />
-            </View>
-            <View style={styles.heroCardChip}>
-              <View style={styles.heroCardChipLine} />
-              <View style={styles.heroCardChipLine} />
-            </View>
-            <Text style={styles.heroCardNumber}>•••• •••• •••• 8501</Text>
-          </LinearGradient>
+        {/* Hero illustration */}
+        <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 0, paddingBottom: 22 }}>
+          <Image
+            source={require("../assets/heroodhpay_trim.png")}
+            style={{
+              width: width * 0.58,
+              height: width * 0.58 * (1176 / 925),
+            }}
+            resizeMode="contain"
+          />
         </View>
       </LinearGradient>
 
-      <View style={styles.stickyTopPanel}>
-        <View style={styles.moneyTransfersContainer}>
-          <View style={styles.moneyTransfers}>
-            <TouchableOpacity
-              style={styles.transferOption}
-              onPress={() => navigation.navigate("ToMobile")}
-            >
-              <View style={styles.iconContainer}>
-                <MaterialIcons name="phone" size={24} color="#000000" />
-              </View>
-              <Text style={styles.transferOptionText}>
-                To Mobile{"\n"}Number
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.transferOption}
-              onPress={() => navigation.navigate("ToBank")}
-            >
-              <View style={styles.iconContainer}>
-                <MaterialIcons
-                  name="account-balance-wallet"
-                  size={24}
-                  color="#000000"
-                />
-              </View>
-              <Text style={styles.transferOptionText}>
-                To Bank/{"\n"}UPI ID
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.transferOption}
-              onPress={() => navigation.navigate("BankDetails")}
-            >
-              <View style={styles.iconContainer}>
-                <MaterialIcons name="account-box" size={24} color="#000000" />
-              </View>
-              <Text style={styles.transferOptionText}>
-                To Self{"\n"}Account
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.transferOption}
-              onPress={() => {
-                payload?.TransactionPIN
-                  ? navigation.navigate('checkWallet')
-                  : navigation.navigate('TransactionPin');
-              }}
-            >
-              <View style={styles.iconContainer}>
-                <MaterialIcons
-                  name="account-balance"
-                  size={24}
-                  color="#000000"
-                />
-              </View>
-              <Text style={styles.transferOptionText}>
-                Check{"\n"}Balance
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.upiContainer}>
-            <View style={styles.upiLite}>
-              <Text style={styles.upiLiteText}>UPI Lite: Try Now</Text>
-            </View>
-            <View style={styles.upiId}>
-              <MaterialIcons name="qr-code-scanner" size={24} color="black" />
-              <Text style={styles.upiIdText}>UPI ID: {payload?.MobileNumber || "Loading"}@axl</Text>
-            </View>
-          </View>
-        </View>
-      </View>
+      {/* Quick Actions moved to Wallet screen */}
 
         <View style={styles.bannerScrollContainer}>
           <Animated.ScrollView
@@ -588,9 +604,9 @@ const HomeScreen = () => {
         <View style={styles.features}>
           <TouchableOpacity onPress={() => navigation.navigate("Wallet")}>
             <View style={styles.feature}>
-              <TouchableOpacity style={styles.iconContainerr}>
-                <MaterialIcons name="account-balance-wallet" size={15} color="#000000" />
-              </TouchableOpacity>
+              <View style={[styles.iconContainerr, { backgroundColor: "#E8F5E9" }]}>
+                <MaterialIcons name="account-balance-wallet" size={15} color="#10B981" />
+              </View>
               <Text style={styles.featureText}>Wallet</Text>
             </View>
           </TouchableOpacity>
@@ -599,9 +615,9 @@ const HomeScreen = () => {
             onPress={() => navigation.navigate("ScratchCardScreen")}
           >
             <View style={styles.feature}>
-              <TouchableOpacity style={styles.iconContainerr}>
-                <MaterialIcons name="card-giftcard" size={15} color="#000000" />
-              </TouchableOpacity>
+              <View style={[styles.iconContainerr, { backgroundColor: "#FFF3E0" }]}>
+                <MaterialIcons name="card-giftcard" size={15} color="#F59E0B" />
+              </View>
               <Text style={styles.featureText}>Explore{"\n"}Rewards</Text>
             </View>
           </TouchableOpacity>
@@ -610,13 +626,32 @@ const HomeScreen = () => {
             onPress={() => navigation.navigate("ReferralScreen")}
           >
             <View style={styles.feature}>
-              <TouchableOpacity style={styles.iconContainerr}>
-                <MaterialIcons name="group-add" size={15} color="#000000" />
-              </TouchableOpacity>
+              <View style={[styles.iconContainerr, { backgroundColor: "#E3F2FD" }]}>
+                <MaterialIcons name="group-add" size={15} color="#2196F3" />
+              </View>
               <Text style={styles.featureText}>Refer &{"\n"}Earn ₹50</Text>
             </View>
           </TouchableOpacity>
         </View>
+
+        {/* Quick Pay / Favorites Section */}
+        {quickPayContacts.length > 0 && (
+          <View style={styles.quickPayContainer}>
+            <View style={styles.quickPayHeader}>
+              <Text style={styles.quickPayTitle}>Quick Pay</Text>
+              <TouchableOpacity onPress={() => navigation.navigate("AllServices")}>
+                <Text style={styles.quickPayViewAll}>View All</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickPayScroll}
+            >
+              {quickPayContacts.map((contact, index) => renderQuickPayItem(contact, index))}
+            </ScrollView>
+          </View>
+        )}
 
         <View style={styles.rechargeAndPayBillsContainer}>
           <View style={styles.rechargeAndPayBills}>
@@ -626,11 +661,11 @@ const HomeScreen = () => {
                 style={styles.billOption}
                 onPress={() => navigation.navigate("MobilePrepaid")}
               >
-                <View style={styles.iconContainer}>
+                <View style={[styles.iconContainer, { backgroundColor: "#E8F5E9" }]}>
                   <MaterialIcons
                     name="phone-android"
                     size={24}
-                    color="#000000"
+                    color="#10B981"
                   />
                 </View>
                 <Text style={styles.billOptionText}>Mobile{"\n"}Prepaid</Text>
@@ -642,11 +677,11 @@ const HomeScreen = () => {
                   navigation.navigate("ServiceCategory", { endpoint: "Mobile Postpaid", name: "Postpaid Recharge", btnName: "PostPaid Recharge", reminder: "pay Postpaid Recharge" })
                 }
               >
-                <View style={styles.iconContainer}>
+                <View style={[styles.iconContainer, { backgroundColor: "#E3F2FD" }]}>
                   <MaterialIcons
                     name="phone-in-talk"
                     size={24}
-                    color="#000000"
+                    color="#2196F3"
                   />
                 </View>
                 <Text style={styles.billOptionText}>Mobile{"\n"}Postpaid</Text>
@@ -658,8 +693,8 @@ const HomeScreen = () => {
                   navigation.navigate("ServiceCategory", { endpoint: "Fastag", name: "FASTAG Recharge", btnName: "Add New Vehicle", reminder: "Zip through toll Plazas" })
                 }
               >
-                <View style={styles.iconContainer}>
-                  <MaterialIcons name="directions-car" size={24} color="#000000" />
+                <View style={[styles.iconContainer, { backgroundColor: "#FFF3E0" }]}>
+                  <MaterialIcons name="directions-car" size={24} color="#FF9800" />
                 </View>
                 <Text style={styles.billOptionText}>FASTag</Text>
               </TouchableOpacity>
@@ -670,11 +705,11 @@ const HomeScreen = () => {
                   navigation.navigate("ServiceCategory", { endpoint: "Landline Postpaid", name: "Landline Postpaid Recharge", btnName: "Add New Landline", reminder: "Pay Landline Plans" })
                 }
               >
-                <View style={styles.iconContainer}>
+                <View style={[styles.iconContainer, { backgroundColor: "#F3E5F5" }]}>
                   <MaterialIcons
                     name="phone"
                     size={24}
-                    color="#000000"
+                    color="#9C27B0"
                   />
                 </View>
                 <Text style={styles.billOptionText}>Landline</Text>
@@ -705,8 +740,8 @@ const HomeScreen = () => {
                   })
                 }
               >
-                <View style={styles.iconContainer}>
-                  <MaterialIcons name="bolt" size={24} color="#000000" />
+                <View style={[styles.iconContainer, { backgroundColor: "#FFF8E1" }]}>
+                  <MaterialIcons name="bolt" size={24} color="#FFC107" />
                 </View>
                 <Text style={styles.loanOptionText}>Electricity</Text>
               </TouchableOpacity>
@@ -722,11 +757,11 @@ const HomeScreen = () => {
                   })
                 }
               >
-                <View style={styles.iconContainer}>
+                <View style={[styles.iconContainer, { backgroundColor: "#FFEBEE" }]}>
                   <MaterialIcons
                     name="local-fire-department"
                     size={24}
-                    color="#000000"
+                    color="#F44336"
                   />
                 </View>
                 <Text style={styles.loanOptionText}>LPG</Text>
@@ -743,8 +778,8 @@ const HomeScreen = () => {
                   })
                 }
               >
-                <View style={styles.iconContainer}>
-                  <MaterialIcons name="fireplace" size={24} color="#000000" />
+                <View style={[styles.iconContainer, { backgroundColor: "#FCE4EC" }]}>
+                  <MaterialIcons name="fireplace" size={24} color="#E91E63" />
                 </View>
                 <Text style={styles.loanOptionText}>Piped Gas</Text>
               </TouchableOpacity>
@@ -760,8 +795,8 @@ const HomeScreen = () => {
                   })
                 }
               >
-                <View style={styles.iconContainer}>
-                  <MaterialIcons name="home" size={24} color="#000000" />
+                <View style={[styles.iconContainer, { backgroundColor: "#E0F2F1" }]}>
+                  <MaterialIcons name="home" size={24} color="#009688" />
                 </View>
                 <Text style={styles.loanOptionText}>Rent</Text>
               </TouchableOpacity>
@@ -790,8 +825,8 @@ const HomeScreen = () => {
                 })
               }
             >
-              <View style={styles.iconContainer}>
-                <MaterialIcons name="credit-card" size={24} color="#000000" />
+              <View style={[styles.iconContainer, { backgroundColor: "#E8EAF6" }]}>
+                <MaterialIcons name="credit-card" size={24} color="#3F51B5" />
               </View>
               <Text style={styles.insuranceOptionText}>Credit{"\n"}Card</Text>
             </TouchableOpacity>
@@ -807,8 +842,8 @@ const HomeScreen = () => {
                 })
               }
             >
-              <View style={styles.iconContainer}>
-                <MaterialIcons name="payments" size={24} color="#000000" />
+              <View style={[styles.iconContainer, { backgroundColor: "#E0F7FA" }]}>
+                <MaterialIcons name="payments" size={24} color="#00BCD4" />
               </View>
               <Text style={styles.insuranceOptionText}>
                 Loan{"\n"}Repayment
@@ -826,11 +861,11 @@ const HomeScreen = () => {
                 })
               }
             >
-              <View style={styles.iconContainer}>
+              <View style={[styles.iconContainer, { backgroundColor: "#FFEBEE" }]}>
                 <MaterialIcons
                   name="health-and-safety"
                   size={24}
-                  color="#000000"
+                  color="#EF5350"
                 />
               </View>
               <Text style={styles.insuranceOptionText}>Insurance</Text>
@@ -847,11 +882,11 @@ const HomeScreen = () => {
                 })
               }
             >
-              <View style={styles.iconContainer}>
+              <View style={[styles.iconContainer, { backgroundColor: "#F3E5F5" }]}>
                 <MaterialIcons
                   name="currency-exchange"
                   size={24}
-                  color="#000000"
+                  color="#AB47BC"
                 />
               </View>
               <Text style={styles.insuranceOptionText}>
@@ -916,7 +951,7 @@ const styles = StyleSheet.create({
   // ===== Blue hero =====
   heroWrap: {
     paddingHorizontal: horizontalGutter,
-    paddingBottom: 36,
+    paddingBottom: 14,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     overflow: "hidden",
@@ -1577,6 +1612,65 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingVertical: 10,
     paddingHorizontal: 20,
+  },
+  quickPayContainer: {
+    backgroundColor: Theme.colors.secondary,
+    borderRadius: 10,
+    marginVertical: 8,
+    marginHorizontal: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  quickPayHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  quickPayTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: Theme.colors.primary,
+  },
+  quickPayViewAll: {
+    fontSize: 13,
+    color: Theme.colors.primary,
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
+  quickPayScroll: {
+    paddingHorizontal: 4,
+    gap: 16,
+  },
+  quickPayItem: {
+    alignItems: "center",
+    width: 70,
+  },
+  quickPayAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  quickPayName: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: Theme.colors.primary,
+    textAlign: "center",
+  },
+  quickPayCategory: {
+    fontSize: 9,
+    color: "#666",
+    textAlign: "center",
+    marginTop: 2,
   },
 });
 

@@ -17,6 +17,7 @@ import { useRegisterStore } from "../../store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import SweetAlert from "../miscellaneous/SweetAlert";
+import { logBBPSFlow } from "../../utils/apiLogger";
 
 
 
@@ -149,7 +150,7 @@ const VehicleRegistration = () => {
         amount: "",
       };
 
-
+      logBBPSFlow("FETCH_BILL", { biller_id, input_params: urlData });
 
       const headers = {
         "Content-Type": "application/json",
@@ -162,6 +163,8 @@ const VehicleRegistration = () => {
         { headers }
       );
       console.log(`/api/v1/bbps/bill/fetch------>`, response.data);
+
+      logBBPSFlow("FETCH_BILL", { success: response.data?.data?.success, bill_amount: response.data?.data?.bill_amount });
 
 
       setLoading(false);

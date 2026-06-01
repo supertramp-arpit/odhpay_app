@@ -19,6 +19,7 @@ import axios from "axios";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { WebView } from "react-native-webview";
 import { getQueryParam } from "../../utils/helper";
+import { logBBPSFlow } from "../../utils/apiLogger";
 
 const { width } = Dimensions.get("window");
 const isSmallDevice = width < 375;
@@ -143,6 +144,8 @@ function PayWithSabpaisa() {
   // ================================================================================
 
   const fetchStatusResponse = async (reference_id) => {
+    logBBPSFlow("PAYMENT_STATUS", { reference_id });
+
     const token = await AsyncStorage.getItem("access_token");
     if (!token) {
       return;
@@ -161,6 +164,7 @@ function PayWithSabpaisa() {
       );
 
       console.log(data);
+      logBBPSFlow("PAYMENT_STATUS", { reference_id, status: data?.status });
 
       // normalize
       const state = String(data?.status || "").toLowerCase(); // "success" | "pending" | "failed" etc.
@@ -344,7 +348,8 @@ function PayWithSabpaisa() {
         }
       }
 
-      console.log(ContentBody)
+      console.log(ContentBody);
+      logBBPSFlow("CREATE_PAYMENT", { amount, service_type: ServiceType, payload: ContentBody });
 
       const authHeaders = {
         Authorization: `Bearer ${token}`,
