@@ -224,14 +224,14 @@ const VehicleRegistration = () => {
 
       setLoading(false);
 
-      // Transform array into object with infoName as key and infoValue as value
-      const additionalInfoArray = response?.data?.data?.additional_info?.info;
-      const infoData = Array.isArray(additionalInfoArray)
-        ? additionalInfoArray.reduce((acc, curElm) => {
-          acc[curElm["infoName"]] = curElm["infoValue"];
-          return acc;
-        }, {})
-        : {};
+      // Transform info into { infoName: infoValue }. BillAvenue returns a single <info>
+      // as an object and multiple as an array, so normalise to an array first.
+      const rawInfo = response?.data?.data?.additional_info?.info;
+      const infoArray = Array.isArray(rawInfo) ? rawInfo : rawInfo ? [rawInfo] : [];
+      const infoData = infoArray.reduce((acc, curElm) => {
+        if (curElm?.infoName) acc[curElm.infoName] = curElm.infoValue;
+        return acc;
+      }, {});
 
       console.log("this is info --->infoData", infoData)
 

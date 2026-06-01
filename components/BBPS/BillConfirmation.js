@@ -174,7 +174,7 @@ const BillFetch2 = () => {
               <Text style={styles.billDetailsTitle}>Bill Details:</Text>
             </View>
 
-            {billDetails.customerName !== "N/A" || "NA" && (
+            {billDetails.customerName && billDetails.customerName !== "N/A" && (
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Customer Name</Text>
                 <Text style={styles.detailValue}>{billDetails.customerName}</Text>
@@ -192,6 +192,13 @@ const BillFetch2 = () => {
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Bill Number</Text>
                 <Text style={styles.detailValue}>{billDetails.billNumber}</Text>
+              </View>
+            )}
+
+            {billDetails.billPeriod && billDetails.billPeriod !== "N/A" && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Bill Period</Text>
+                <Text style={styles.detailValue}>{billDetails.billPeriod}</Text>
               </View>
             )}
 
