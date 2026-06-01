@@ -91,6 +91,61 @@ const VehicleRegistration = () => {
     setErrors((prev) => ({ ...prev, [paramName]: "" }));
   };
 
+  // ---- Electricity State -> District-Discom picker (PhonePe-style) ----
+  const [discomStates, setDiscomStates] = useState([]);
+  const [selectedState, setSelectedState] = useState("");
+  const [discomOptions, setDiscomOptions] = useState([]);
+  const [loadingDiscoms, setLoadingDiscoms] = useState(false);
+
+  const hasDiscomField = registrationFields.some((f) => {
+    const n = (f?.paramName || "").trim().toLowerCase();
+    return n === "district-discom" || (n.includes("district") && n.includes("discom"));
+  });
+
+  const fetchDiscoms = async (state) => {
+    if (!state) {
+      setDiscomOptions([]);
+      return;
+    }
+    try {
+      setLoadingDiscoms(true);
+      const access_token = await AsyncStorage.getItem("access_token");
+      const res = await axios.get(
+        `https://newapi.odhpay.com/api/v1/bbps/discoms?state=${encodeURIComponent(state)}`,
+        { headers: { Accept: "application/json", Authorization: `Bearer ${access_token}` } }
+      );
+      setDiscomOptions(res?.data?.data?.discoms || []);
+    } catch (e) {
+      console.log("discoms fetch failed:", e?.message);
+      setDiscomOptions([]);
+    } finally {
+      setLoadingDiscoms(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!hasDiscomField) return;
+    (async () => {
+      try {
+        const access_token = await AsyncStorage.getItem("access_token");
+        const res = await axios.get(
+          "https://newapi.odhpay.com/api/v1/bbps/discoms/states",
+          { headers: { Accept: "application/json", Authorization: `Bearer ${access_token}` } }
+        );
+        const states = res?.data?.data?.states || [];
+        setDiscomStates(states);
+        // Auto-select when there's only one state (e.g. UP today)
+        if (states.length === 1) {
+          setSelectedState(states[0]);
+          fetchDiscoms(states[0]);
+        }
+      } catch (e) {
+        console.log("discom states fetch failed:", e?.message);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasDiscomField]);
+
   const handleSubmit = async () => {
     let newErrors = {};
 
@@ -327,7 +382,66 @@ const VehicleRegistration = () => {
               )}
             </Text>
 
-            {isDiscomField && hasDiscomList ? (
+            {isDiscomField && discomStates.length > 0 ? (
+              <>
+                {/* State picker (PhonePe-style) */}
+                <Text style={styles.pickerLabel}>State</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={selectedState}
+                    onValueChange={(value) => {
+                      setSelectedState(value);
+                      handleInputChange(field.paramName, ""); // reset discom on state change
+                      fetchDiscoms(value);
+                    }}
+                    style={styles.picker}
+                    mode="dialog"
+                  >
+                    <Picker.Item label="Select State" value="" />
+                    {discomStates.map((st, i) => (
+                      <Picker.Item key={i} label={st} value={st} />
+                    ))}
+                  </Picker>
+                </View>
+
+                {/* District / Discom picker */}
+                <Text style={styles.pickerLabel}>District / Discom</Text>
+                <View
+                  style={[
+                    styles.pickerContainer,
+                    errors[field.paramName] ? styles.errorBorder : null,
+                  ]}
+                >
+                  <Picker
+                    selectedValue={inputs[field.paramName] || ""}
+                    enabled={!!selectedState && !loadingDiscoms}
+                    onValueChange={(value) =>
+                      handleInputChange(field.paramName, value)
+                    }
+                    style={styles.picker}
+                    mode="dialog"
+                  >
+                    <Picker.Item
+                      label={
+                        loadingDiscoms
+                          ? "Loading..."
+                          : selectedState
+                            ? "Select District / Discom"
+                            : "Select State first"
+                      }
+                      value=""
+                    />
+                    {discomOptions.map((d, i) => (
+                      <Picker.Item
+                        key={i}
+                        label={`${d.district} — ${d.discom}`}
+                        value={d.value}
+                      />
+                    ))}
+                  </Picker>
+                </View>
+              </>
+            ) : isDiscomField && hasDiscomList ? (
               <View
                 style={[
                   styles.pickerContainer,
