@@ -95,17 +95,26 @@ const BillFetch = () => {
       value: item?.infoValue,
     })),
     ...infoDataArray,
-  ].filter(
-    (item) =>
-      item.value !== "NA" &&
-      item.value !== "N/A" &&
-      item.value !== null &&
-      item.value !== undefined &&
-      item.value !== "" &&
-      item.label &&
-      !item.label.toLowerCase().includes("current outstanding") &&
-      !item.label.toLowerCase().includes("maximum")
-  );
+  ]
+    .filter(
+      (item) =>
+        item.value !== "NA" &&
+        item.value !== "N/A" &&
+        item.value !== null &&
+        item.value !== undefined &&
+        item.value !== "" &&
+        item.label &&
+        !item.label.toLowerCase().includes("current outstanding") &&
+        !item.label.toLowerCase().includes("maximum")
+    )
+    // additionalInfoList and infoData carry the same fields, so dedupe by label
+    // (keep first). Also prevents React's "two children with the same key" warning.
+    .filter(
+      (item, index, arr) =>
+        arr.findIndex(
+          (other) => (other.label || "").trim().toLowerCase() === (item.label || "").trim().toLowerCase()
+        ) === index
+    );
 
   const hasBillAmount = !!data?.bill_amount || !!data?.amount;
 
@@ -292,8 +301,8 @@ const BillFetch = () => {
                   {filteredBillDetails.length === 0 ? "Enter the Amount" : "Bill Details"}
                 </Text>
               </View>
-              {filteredBillDetails.map(({ label, value }) => (
-                <View style={styles.detailRow} key={label}>
+              {filteredBillDetails.map(({ label, value }, index) => (
+                <View style={styles.detailRow} key={`${label}-${index}`}>
                   <Text style={styles.detailLabel}>{label}</Text>
                   <Text numberOfLines={2} ellipsizeMode="tail" style={styles.detailValue}>{value}</Text>
                 </View>
