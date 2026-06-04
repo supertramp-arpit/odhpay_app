@@ -237,75 +237,61 @@ const VehicleRegistration = () => {
 
       const fetchedData = response?.data?.data || response?.data || {};
 
+      // A bill fetch is successful ONLY when the backend says success === true with no
+      // error_message. A failed fetch (wrong card/details, biller error, etc.) returns
+      // success=false + error_message — surface it as an ERROR and do NOT navigate.
+      const fetchSucceeded =
+        fetchedData?.success === true && !fetchedData?.error_message;
 
-      if (response?.data?.data?.error_message) {
-        fetchedData.success = false;
-        setAlertMessage(response?.data?.data?.error_message);
+      if (!fetchSucceeded) {
+        const failMessage =
+          fetchedData?.error_message ||
+          response?.data?.message ||
+          "Unable to fetch bill. Please check the details and try again.";
+        console.log("Bill fetch failed:", failMessage);
+        setAlertMessage(failMessage);
+        setMessageType("error");
+        setMessageTitle("Bill Fetch Failed");
         setAlertVisible(true);
-        setMessageType("success");
-        setMessageTitle("Alert");
-
         return;
       }
 
-      if (fetchedData && fetchedData.success) {
+      // Prepare data for BillConfirmation - pass flat data structure directly
+      const EnterBillAmountData = {
+        bill_amount: fetchedData?.bill_amount,
+        bill_date: fetchedData?.bill_date,
+        bill_number: fetchedData?.bill_number,
+        customer_name: fetchedData?.customer_name,
+        due_date: fetchedData?.due_date,
+        biller_id: fetchedData?.biller_id,
+        reference_no: fetchedData?.reference_no,
+        fetch_id: fetchedData?.fetch_id,
+        bill_period: fetchedData?.bill_period,
+        card_number: fetchedData?.card_number,
+        additional_info: fetchedData?.additional_info,
+        amount_options: fetchedData?.amount_options,
+      };
 
-        // Prepare data for BillConfirmation - pass flat data structure directly
-        const EnterBillAmountData = {
-          bill_amount: fetchedData?.bill_amount,
-          bill_date: fetchedData?.bill_date,
-          bill_number: fetchedData?.bill_number,
-          customer_name: fetchedData?.customer_name,
-          due_date: fetchedData?.due_date,
-          biller_id: fetchedData?.biller_id,
-          reference_no: fetchedData?.reference_no,
-          fetch_id: fetchedData?.fetch_id,
-          bill_period: fetchedData?.bill_period,
-          card_number: fetchedData?.card_number,
-          additional_info: fetchedData?.additional_info,
-          amount_options: fetchedData?.amount_options,
-        };
+      console.log("this is EnterBillAmount", EnterBillAmountData);
+      console.log("Navigating with doesSupportUserInput:", doesSupportUserInput, "doesSupportEnterBillAmount:", doesSupportEnterBillAmount);
 
-        console.log("this is EnterBillAmount", EnterBillAmountData)
-
-
-        console.log("Navigating with doesSupportUserInput:", doesSupportUserInput, "doesSupportEnterBillAmount:", doesSupportEnterBillAmount);
-
-        if (doesSupportUserInput) {
-          navigation.navigate("EnterBillAmount", {
-            data: fetchedData,
-            paymentBnak,
-            tagName,
-            IsAmountEditable: true,
-            biller_id,
-            urlData,
-            billerfetchId: fetchedData["fetch_id"],
-            iconImage,
-            billerCategory,
-            billerName,
-            paymentChannels,
-            infoData,
-          });
-        } else {
-          // Default to BillConfirmation when bill fetch succeeds
-          navigation.navigate("BillConfirmation", {
-            data: EnterBillAmountData,
-            paymentBnak,
-            tagName,
-            IsAmountEditable: false,
-            biller_id,
-            urlData,
-            billerfetchId: fetchedData["fetch_id"],
-            iconImage,
-            billerCategory,
-            billerName,
-            paymentChannels,
-            infoData,
-          });
-        }
+      if (doesSupportUserInput) {
+        navigation.navigate("EnterBillAmount", {
+          data: fetchedData,
+          paymentBnak,
+          tagName,
+          IsAmountEditable: true,
+          biller_id,
+          urlData,
+          billerfetchId: fetchedData["fetch_id"],
+          iconImage,
+          billerCategory,
+          billerName,
+          paymentChannels,
+          infoData,
+        });
       } else {
-
-        console.log("Bill fetch failed:", fetchedData?.error_message || "Unable to fetch bill.");
+        // Default to BillConfirmation when bill fetch succeeds
         navigation.navigate("BillConfirmation", {
           data: EnterBillAmountData,
           paymentBnak,
@@ -320,25 +306,29 @@ const VehicleRegistration = () => {
           paymentChannels,
           infoData,
         });
-        // setAlertMessage(fetchedData?.error_message || "Unable to fetch bill.");
-        // setAlertVisible(true);
       }
     } catch (error) {
       setLoading(false);
+      let failMessage = "Something went wrong while fetching the bill. Please try again.";
       if (axios.isAxiosError(error)) {
-        console.error(
-          "Axios Error:",
-          error.response?.status,
-          error.response?.data
-        );
-
-        if (error.response?.status === 404) {
-          Alert.alert("Error", "Requested resource not found (404)");
-        }
+        console.error("Axios Error:", error.response?.status, error.response?.data);
+        const detail = error.response?.data?.detail;
+        failMessage =
+          (typeof detail === "string" && detail) ||
+          detail?.error_message ||
+          detail?.message ||
+          error.response?.data?.message ||
+          (error.response?.status === 404
+            ? "Requested resource not found."
+            : "Unable to fetch bill. Please check the details and try again.");
       } else {
         console.error("Unexpected Error:", error);
-        Alert.alert("Error", "Something went wrong!");
       }
+      // Always surface failures as an error modal (consistent with the success path).
+      setAlertMessage(failMessage);
+      setMessageType("error");
+      setMessageTitle("Bill Fetch Failed");
+      setAlertVisible(true);
     }
   };
 
