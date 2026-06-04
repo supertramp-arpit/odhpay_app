@@ -16,10 +16,12 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Theme from "../Theme";
 
 const BillFetch = () => {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [amount, setAmount] = useState("0");
   const [errorMessage, setErrorMessge] = useState("");
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -30,6 +32,7 @@ const BillFetch = () => {
     data,
     paymentBnak = "",
     tagName = "",
+    billerCategory = "",
     IsAmountEditable = null,
     biller_id = "",
     urlData = "",
@@ -122,6 +125,11 @@ const BillFetch = () => {
   let minAmount = paymentChannels?.[0]?.minAmount ? parseFloat(paymentChannels[0].minAmount) : null;
   let maxAmount = paymentChannels?.[0]?.maxAmount ? parseFloat(paymentChannels[0].maxAmount) : null;
 
+  // Credit-card bills: allow any amount — skip the biller's min/max channel limits.
+  // Every other category keeps the limits enforced. (billerCategory is the reliable
+  // signal; tagName is the endpoint/category label and also reads "Credit Card" here.)
+  const isCreditCard = /credit\s*card/i.test(`${billerCategory || ""} ${tagName || ""}`);
+
 
   const [errorMessge, setErrorMessage] = useState("");
   const [paymentLoading, setPaymentLoading] = useState(false);
@@ -131,13 +139,19 @@ const BillFetch = () => {
   const handleProceed = async () => {
     const numAmount = parseFloat(amount) || 0;
 
-    // Validate min/max only if they are defined
-    if (minAmount !== null && numAmount < minAmount) {
+    // Always require a positive amount (incl. credit cards).
+    if (numAmount <= 0) {
+      setErrorMessge("Please enter a valid amount");
+      return;
+    }
+
+    // Validate min/max only if defined — but credit-card bills allow any amount.
+    if (!isCreditCard && minAmount !== null && numAmount < minAmount) {
       setErrorMessge(`Minimum amount should be ₹${minAmount}`);
       return;
     }
 
-    if (maxAmount !== null && numAmount > maxAmount) {
+    if (!isCreditCard && maxAmount !== null && numAmount > maxAmount) {
       setErrorMessge(`Maximum amount should be ₹${maxAmount}`);
       return;
     }
@@ -199,6 +213,12 @@ const BillFetch = () => {
       return;
     }
 
+    // Credit-card bills allow any amount — no min/max enforcement.
+    if (isCreditCard) {
+      setErrorMessge("");
+      return;
+    }
+
     // Validate min/max only if they are defined
     if (minAmount !== null && numAmount < minAmount) {
       setErrorMessge(`Minimum amount should be ₹${minAmount}`);
@@ -211,7 +231,7 @@ const BillFetch = () => {
     }
 
     setErrorMessge("");
-  }, [amount, minAmount, maxAmount]);
+  }, [amount, minAmount, maxAmount, isCreditCard]);
 
   useEffect(() => {
     if (resolvedAmount !== undefined && resolvedAmount !== null) {
@@ -226,7 +246,8 @@ const BillFetch = () => {
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
           {/* Header */}
@@ -348,19 +369,22 @@ const BillFetch = () => {
           </View>
         </ScrollView>
 
-        {/* Proceed Button */}
+        {/* Proceed Button (fixed footer, lifted above the system nav bar) */}
         {!keyboardVisible && (
-          <TouchableOpacity
-            style={[styles.proceedButton, paymentLoading && { opacity: 0.6 }]}
-            onPress={handleProceed}
-            disabled={paymentLoading}
-          >
-            {paymentLoading ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Text style={styles.proceedButtonText}>PROCEED TO PAY</Text>
-            )}
-          </TouchableOpacity>
+          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <TouchableOpacity
+              style={[styles.proceedButton, paymentLoading && styles.proceedButtonDisabled]}
+              onPress={handleProceed}
+              disabled={paymentLoading}
+              activeOpacity={0.8}
+            >
+              {paymentLoading ? (
+                <ActivityIndicator size="small" color={Theme.colors.primary} />
+              ) : (
+                <Text style={styles.proceedButtonText}>PROCEED TO PAY</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         )}
       </KeyboardAvoidingView>
 
@@ -394,6 +418,10 @@ const styles = StyleSheet.create({
   },
   helpButton: {
     marginLeft: 8,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 24,
   },
   card: {
     backgroundColor: "#fff",
@@ -500,16 +528,21 @@ const styles = StyleSheet.create({
   selectedAmountText: {
     color: "white",
   },
+  footer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: Theme.colors.primary,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+  },
   proceedButton: {
     backgroundColor: "#fff",
-    margin: 16,
     padding: 16,
     borderRadius: 8,
     alignItems: "center",
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
+  },
+  proceedButtonDisabled: {
+    opacity: 0.6,
   },
   proceedButtonText: {
     color: Theme.colors.primary,
