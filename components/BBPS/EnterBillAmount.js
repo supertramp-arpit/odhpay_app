@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Image,
   TouchableOpacity,
-  StatusBar,
   TextInput,
   KeyboardAvoidingView,
   Platform,
@@ -410,7 +409,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: 16,
-    paddingTop: StatusBar.currentHeight + 16,
+    // The app is already wrapped in a global <SafeAreaView> (AppNavigator), so the
+    // status-bar inset is handled there. Adding StatusBar.currentHeight here too
+    // double-counted it and left a large gap under the status bar.
+    paddingTop: 16,
   },
   backButton: {
     marginRight: 16,
