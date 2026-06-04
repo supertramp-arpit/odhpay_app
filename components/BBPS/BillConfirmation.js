@@ -1,50 +1,74 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  Image,
   TouchableOpacity,
-  StatusBar,
   ScrollView,
   ActivityIndicator,
   Alert,
+  Dimensions,
+  Image,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import moment from "moment";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import Theme from "../Theme";
 
-const BillFetch2 = () => {
+const { width } = Dimensions.get("window");
+
+const BillConfirmation = () => {
   const navigation = useNavigation();
-  // Get data from route data or use default values
   const route = useRoute();
-  const { data, paymentBnak, tagName, biller_id, billerCategory, billerName, paymentChannels = [], activeGateway = "", infoData = {} } = route.params || {};
+  const { top: safeTop, bottom: safeBottom } = useSafeAreaInsets();
 
-  console.log("BillConfirmation - infoData:", infoData);
+  const {
+    data,
+    paymentBnak,
+    tagName,
+    biller_id,
+    billerCategory,
+    billerName,
+    paymentChannels = [],
+    infoData = {}
+  } = route.params || {};
 
+  useEffect(() => {
+    navigation.setOptions({
+      title: tagName || billerCategory || "Pay Bill",
+      headerRight: () => (
+        <Image
+          source={require("../../assets/BharatConnectReverseLogo.png")}
+          style={{ width: 80, height: 28, marginRight: 8 }}
+          resizeMode="contain"
+        />
+      ),
+    });
+  }, [navigation, tagName, billerCategory]);
 
-
-  // Handle case where data might be undefined
   if (!data) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: safeTop }]}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation?.goBack()}>
-            <Ionicons name="arrow-back" size={24} color="white" />
+          <TouchableOpacity onPress={() => navigation?.goBack()}>
+            <Ionicons name="arrow-back" size={24} color={Theme.colors.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Pay Bill</Text>
+          <Text style={styles.headerTitle}>Bill Payment</Text>
         </View>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: 'white', fontSize: 16 }}>Error: No bill data found</Text>
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color={Theme.colors.danger} />
+          <Text style={styles.errorText}>No bill data found</Text>
+          <TouchableOpacity style={styles.errorButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.errorButtonText}>Go Back</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
   }
 
-  // Extract min and max from paymentChannels - purely dynamic, no static values
   let minAmountDue = paymentChannels?.[0]?.minAmount ? parseFloat(paymentChannels[0].minAmount) : null;
   let maxAmount = paymentChannels?.[0]?.maxAmount ? parseFloat(paymentChannels[0].maxAmount) : null;
 
@@ -59,10 +83,6 @@ const BillFetch2 = () => {
     billNumber: data?.bill_number || "N/A",
     billPeriod: data?.bill_period || "N/A",
     referenceNo: data?.reference_no || "N/A",
-  };
-
-  const handleBack = () => {
-    navigation?.goBack();
   };
 
   const [paymentLoading, setPaymentLoading] = useState(false);
@@ -83,16 +103,9 @@ const BillFetch2 = () => {
         return;
       }
 
-
-
-      // Build BBPS-specific 
-      // payload with all required fields
       const bbpsPayload = {
-
-
         amount: billDetails.totalAmount,
         purpose: "bbps_payment",
-
         bbps_data: {
           biller_id: biller_id,
           biller_name: billerName,
@@ -111,8 +124,6 @@ const BillFetch2 = () => {
           },
         }
       };
-
-      // Navigate to appropriate payment gateway
 
       navigation.navigate('PayFromWallet', {
         autoStart: false,
@@ -134,122 +145,155 @@ const BillFetch2 = () => {
     }
   };
 
+  const isDueSoon = () => {
+    if (billDetails.dueDate === "N/A") return false;
+    const dueDate = moment(data?.due_date);
+    const daysUntilDue = dueDate.diff(moment(), 'days');
+    return daysUntilDue <= 7 && daysUntilDue >= 0;
+  };
+
+  const isOverdue = () => {
+    if (billDetails.dueDate === "N/A") return false;
+    return moment().isAfter(moment(data?.due_date));
+  };
+
   return (
     <View style={styles.container}>
-
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Ionicons name="arrow-back" size={24} color="white" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Pay {tagName || "Bill"}</Text>
-        <TouchableOpacity style={styles.helpButton}>
-          <Ionicons name="help-circle-outline" size={24} color="white" />
-        </TouchableOpacity>
-      </View>
-
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={styles.scrollContent}
+        style={styles.scrollView}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: safeBottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
-
-
-        {/* Card Details */}
-        <View style={styles.cardDetails}>
-          <View style={styles.bankInfo}>
-            <View style={styles.initialsCircle}>
-              <Text style={styles.initials}>{paymentBnak?.substring(0, 2).toUpperCase() || "BL"}</Text>
+        {/* Bill Details with Biller Header */}
+        <View style={styles.card}>
+          {/* Biller as Header */}
+          <View style={styles.billerHeader}>
+            <View style={styles.billerIcon}>
+              <Text style={styles.billerInitials}>
+                {paymentBnak?.substring(0, 2).toUpperCase() || "BL"}
+              </Text>
             </View>
-            <View style={styles.bankTextContainer}>
-              <Text style={styles.bankName}>
-                {paymentBnak || "Biller"}
+            <View style={styles.billerInfo}>
+              <Text style={styles.billerName} numberOfLines={2}>
+                {paymentBnak || billerName || "Biller"}
               </Text>
             </View>
           </View>
 
-          {/* Bill Details Section */}
-          <View style={styles.billDetails}>
-            <View style={styles.billHeader}>
-              <Text style={styles.billDetailsTitle}>Bill Details:</Text>
+          <View style={styles.divider} />
+
+          {billDetails.customerName && billDetails.customerName !== "N/A" && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Customer Name</Text>
+              <Text style={styles.detailValue}>{billDetails.customerName}</Text>
             </View>
-
-            {billDetails.customerName && billDetails.customerName !== "N/A" && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Customer Name</Text>
-                <Text style={styles.detailValue}>{billDetails.customerName}</Text>
-              </View>
-            )}
-
-            {billDetails.billDate !== "N/A" && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Bill Date</Text>
-                <Text style={styles.detailValue}>{billDetails.billDate}</Text>
-              </View>
-            )}
-
-            {billDetails.billNumber !== "N/A" && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Bill Number</Text>
-                <Text style={styles.detailValue}>{billDetails.billNumber}</Text>
-              </View>
-            )}
-
-            {billDetails.billPeriod && billDetails.billPeriod !== "N/A" && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Bill Period</Text>
-                <Text style={styles.detailValue}>{billDetails.billPeriod}</Text>
-              </View>
-            )}
-
-            {/* Additional Info from infoData */}
-            {infoData && Object.keys(infoData).length > 0 && (
-              <>
-                {Object.entries(infoData).map(([key, value], index) => (
-                  <View style={styles.detailRow} key={index}>
-                    <Text style={styles.detailLabel}>{key}</Text>
-                    <Text style={styles.detailValue}>{value}</Text>
-                  </View>
-                ))}
-              </>
-            )}
-
-
-          </View>
-
-          {/* Amount Display */}
-          <View style={styles.amountDisplay}>
-            <Text style={styles.rupeeSymbol}>₹</Text>
-            <Text style={styles.amount}>{billDetails.totalAmount.toFixed(2)}</Text>
-          </View>
-
-          {billDetails.dueDate !== "N/A" && (
-            <Text style={styles.dueDate}>Due Date: {billDetails.dueDate}</Text>
           )}
 
+          {billDetails.billNumber !== "N/A" && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Bill Number</Text>
+              <Text style={styles.detailValue}>{billDetails.billNumber}</Text>
+            </View>
+          )}
 
-          {/* Note */}
-          <View style={styles.noteContainer}>
-            <View style={styles.noteLine} />
-            <Text style={styles.noteText}>
-              Note: {paymentBnak || "Biller"} will consider today's date as payment date. It may take upto 30 minutes to reflect in account.
-            </Text>
+          {billDetails.billDate !== "N/A" && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Bill Date</Text>
+              <Text style={styles.detailValue}>{billDetails.billDate}</Text>
+            </View>
+          )}
+
+          {billDetails.billPeriod && billDetails.billPeriod !== "N/A" && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Bill Period</Text>
+              <Text style={styles.detailValue}>{billDetails.billPeriod}</Text>
+            </View>
+          )}
+
+          {infoData && Object.keys(infoData).length > 0 && (
+            Object.entries(infoData).map(([key, value], index) => (
+              <View style={styles.detailRow} key={index}>
+                <Text style={styles.detailLabel}>{key}</Text>
+                <Text style={styles.detailValue}>{value}</Text>
+              </View>
+            ))
+          )}
+
+          {/* Total Amount - aligned row */}
+          <View style={styles.amountSection}>
+            <View style={styles.amountRowMain}>
+              <Text style={styles.amountBoxLabel}>Total Amount</Text>
+              <View style={styles.amountBoxRow}>
+                <Text style={styles.amountBoxCurrency}>₹</Text>
+                <Text style={styles.amountBoxValue}>
+                  {billDetails.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
+              </View>
+            </View>
+            {billDetails.dueDate !== "N/A" && (
+              <View style={styles.dueRow}>
+                <View style={[
+                  styles.dueBadgeInline,
+                  isOverdue() && styles.dueBadgeOverdue,
+                  isDueSoon() && !isOverdue() && styles.dueBadgeSoon
+                ]}>
+                  <Ionicons
+                    name={isOverdue() ? "alert-circle" : "calendar-outline"}
+                    size={12}
+                    color={isOverdue() ? "#DC2626" : isDueSoon() ? "#B45309" : "#047857"}
+                  />
+                  <Text style={[
+                    styles.dueTextInline,
+                    isOverdue() && styles.dueTextOverdue,
+                    isDueSoon() && !isOverdue() && styles.dueTextSoon
+                  ]}>
+                    {isOverdue() ? "Overdue" : "Due"}: {billDetails.dueDate}
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
+        </View>
+
+        {/* Note */}
+        <View style={styles.noteCard}>
+          <Ionicons name="information-circle" size={18} color={Theme.colors.warning} />
+          <Text style={styles.noteText}>
+            Payment will be processed instantly. It may take up to 30 minutes to reflect in your account.
+          </Text>
+        </View>
+
+        {/* Security */}
+        <View style={styles.securityRow}>
+          <MaterialIcons name="lock" size={14} color="rgba(255,255,255,0.5)" />
+          <Text style={styles.securityText}>Secured by 256-bit SSL encryption</Text>
         </View>
       </ScrollView>
 
-      {/* Proceed Button */}
-      <TouchableOpacity
-        style={[styles.proceedButton, paymentLoading && { opacity: 0.6 }]}
-        onPress={handleProceed}
-        disabled={paymentLoading}
-      >
-        {paymentLoading ? (
-          <ActivityIndicator size="small" color="white" />
-        ) : (
-          <Text style={styles.proceedButtonText}>PROCEED TO PAY</Text>
-        )}
-      </TouchableOpacity>
+      {/* Bottom Bar */}
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(safeBottom, 16) }]}>
+        <View style={styles.totalSection}>
+          <Text style={styles.totalLabel}>Total Payable</Text>
+          <Text style={styles.totalAmount}>
+            ₹{billDetails.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.payButton, paymentLoading && styles.payButtonDisabled]}
+          onPress={handleProceed}
+          disabled={paymentLoading}
+          activeOpacity={0.8}
+        >
+          {paymentLoading ? (
+            <ActivityIndicator size="small" color={Theme.colors.secondary} />
+          ) : (
+            <>
+              <Text style={styles.payButtonText}>Pay Now</Text>
+              <Ionicons name="arrow-forward" size={18} color={Theme.colors.secondary} />
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
@@ -259,223 +303,261 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Theme.colors.primary,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    paddingTop: StatusBar.currentHeight + 16,
-  },
-  backButton: {
-    marginRight: 16,
-  },
-  headerTitle: {
-    color: "white",
-    fontSize: 20,
+
+  // Error State
+  errorContainer: {
     flex: 1,
-  },
-  helpButton: {
-    marginLeft: 8,
-  },
-  banner: {
-    backgroundColor: Theme.colors.primary,
-    margin: 16,
-    borderRadius: 12,
-    padding: 16,
-    overflow: "hidden",
-  },
-  bannerContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  bannerImage: {
-    width: 80,
-    height: 80,
-    marginRight: 16,
-  },
-  bannerTextContainer: {
-    flex: 1,
-  },
-  bannerTitle: {
-    color: "white",
-    fontSize: 16,
-  },
-  bannerAmount: {
-    color: "white",
-    fontSize: 24,
-    fontWeight: "bold",
-    marginVertical: 4,
-  },
-  bannerSubtitle: {
-    color: "white",
-    fontSize: 14,
-  },
-  payNowButton: {
-    backgroundColor: "white",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    alignSelf: "flex-start",
-    marginTop: 8,
-  },
-  payNowText: {
-    color: Theme.colors.primary,
-    fontWeight: "500",
-  },
-  termsText: {
-    color: "white",
-    fontSize: 12,
-    alignSelf: "flex-end",
-    marginTop: 8,
-  },
-  cardDetails: {
-    backgroundColor: "white",
-    margin: 16,
-    borderRadius: 12,
-    padding: 16,
-  },
-  bankInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  initialsCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#E57373",
     justifyContent: "center",
     alignItems: "center",
+    padding: 24,
   },
-  initials: {
-    color: "white",
-    fontSize: 20,
-    fontWeight: "500",
-  },
-  bankTextContainer: {
-    marginLeft: 12,
-  },
-  bankName: {
-    color: "black",
+  errorText: {
     fontSize: 16,
-    fontWeight: "500",
-    marginRight: 30,
-
-  },
-  cardNumber: {
-    color: "#9E9E9E",
-    marginTop: 4,
-  },
-  billDetails: {
+    color: Theme.colors.textSecondary,
+    marginTop: 12,
     marginBottom: 24,
   },
-  billHeader: {
+  errorButton: {
+    backgroundColor: Theme.colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  errorButtonText: {
+    color: Theme.colors.secondary,
+    fontWeight: "600",
+  },
+
+  // Scroll
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+
+  // Amount Section - Realistic Glass Lens
+  amountSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.08)",
+  },
+  // Total amount - plain aligned row
+  amountRowMain: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
   },
-  billDetailsTitle: {
-    color: "black",
-    fontSize: 14,
+  amountBoxLabel: {
+    fontSize: 15,
+    color: Theme.colors.text,
+    fontWeight: "700",
   },
-  hideButton: {
-    color: Theme.colors.primary,
-    fontSize: 14,
+  amountBoxRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+  },
+  amountBoxCurrency: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: Theme.colors.text,
+    marginRight: 2,
+  },
+  amountBoxValue: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: Theme.colors.text,
+    letterSpacing: -0.5,
+  },
+  dueRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 10,
+  },
+  dueBadgeInline: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: "rgba(16,185,129,0.12)",
+    gap: 4,
+  },
+  dueBadgeSoon: {
+    backgroundColor: "rgba(245,158,11,0.12)",
+  },
+  dueBadgeOverdue: {
+    backgroundColor: "rgba(239,68,68,0.12)",
+  },
+  dueTextInline: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#047857",
+  },
+  dueTextSoon: {
+    color: "#B45309",
+  },
+  dueTextOverdue: {
+    color: "#DC2626",
   },
 
+  // Card - Glassy White
+  card: {
+    backgroundColor: "rgba(255,255,255,0.95)",
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,1)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
+  },
 
+  // Biller Header (inside Bill Details card)
+  billerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  billerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: Theme.colors.primary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  billerInitials: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: Theme.colors.secondary,
+  },
+  billerInfo: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  billerName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Theme.colors.text,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "rgba(0,0,0,0.08)",
+    marginBottom: 12,
+  },
+
+  // Detail Row
   detailRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 12,
     alignItems: "flex-start",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.05)",
   },
   detailLabel: {
-    width: 120,
-    color: "#9E9E9E",
-    fontSize: 14,
-    marginRight: 12,
+    fontSize: 13,
+    color: Theme.colors.textSecondary,
+    flex: 1,
   },
   detailValue: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Theme.colors.text,
     flex: 1,
-    color: "#9E9E9E",
-    fontSize: 14,
-    flexWrap: "wrap",
     textAlign: "right",
   },
-  amountDisplay: {
+
+  // Note - Glassy
+  noteCard: {
     flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  rupeeSymbol: {
-    color: "black",
-    fontSize: 24,
-    marginRight: 4,
-  },
-  amount: {
-    color: "black",
-    fontSize: 32,
-    fontWeight: "500",
-  },
-  dueDate: {
-    color: "#FF8A65",
-    fontSize: 14,
-    textAlign: "center",
-    marginBottom: 24,
-  },
-  amountOptions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 24,
-  },
-  amountOption: {
-    borderWidth: 1,
-    borderColor: "#B388FF",
+    backgroundColor: "rgba(254,243,199,0.85)",
     borderRadius: 12,
-    padding: 12,
-    flex: 0.48,
-  },
-  amountOptionLabel: {
-    color: "#9E9E9E",
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  amountOptionValue: {
-    color: "#B388FF",
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  noteContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-  },
-  noteLine: {
-    width: 4,
-    height: "100%",
-    backgroundColor: "#FF8A65",
-    marginRight: 12,
-    borderRadius: 2,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.2)",
+    shadowColor: "#F59E0B",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
   noteText: {
-    color: "#9E9E9E",
+    flex: 1,
     fontSize: 12,
+    color: "#92400E",
+    marginLeft: 10,
+    lineHeight: 18,
+  },
+
+  // Security
+  securityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+  },
+  securityText: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.5)",
+    marginLeft: 6,
+  },
+
+  // Bottom Bar - Glassy
+  bottomBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.05)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  totalSection: {
     flex: 1,
   },
-  proceedButton: {
-    backgroundColor: "white",
-    margin: 16,
-    padding: 16,
-    borderRadius: 8,
-    alignItems: "center",
+  totalLabel: {
+    fontSize: 12,
+    color: Theme.colors.textSecondary,
   },
-  proceedButtonText: {
-    color: Theme.colors.primary,
+  totalAmount: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: Theme.colors.text,
+  },
+  payButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Theme.colors.primary,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  payButtonDisabled: {
+    opacity: 0.6,
+  },
+  payButtonText: {
     fontSize: 16,
-    fontWeight: "500",
+    fontWeight: "600",
+    color: Theme.colors.secondary,
   },
 });
 
-export default BillFetch2;
+export default BillConfirmation;

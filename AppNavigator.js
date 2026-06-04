@@ -262,13 +262,14 @@ export default function AppNavigator() {
 
 
                 <Stack.Screen name="BillConfirmation" component={BillConfirmation} options={{
-                  headerShown: false, headerStyle: {
+                  headerShown: true,
+                  headerStyle: {
                     backgroundColor: Theme.colors.primary,
-
                   },
+                  headerTintColor: Theme.colors.secondary,
                   headerTitleStyle: {
                     color: "white",
-                    fontSize: 20,
+                    fontSize: 18,
                   },
                 }} />
 
