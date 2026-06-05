@@ -17,6 +17,22 @@ import Theme from "../Theme";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { logBBPSFlow } from "../../utils/apiLogger";
 
+// Biller logo from the asset CDN (served by biller_id). Only ~1.2k of the 22k billers
+// have a logo, so fall back to the initials avatar when the image 404s.
+const BillerAvatar = ({ billerId, initials }) => {
+  const [failed, setFailed] = useState(false);
+  if (billerId && !failed) {
+    return (
+      <Image
+        style={styles.avatarImage}
+        source={{ uri: `https://assetcdn.odhpay.com/biller-assets/${billerId}.png` }}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return <Text style={styles.initials}>{initials}</Text>;
+};
+
 const FAST = () => {
   const route = useRoute();
   const { endpoint, reminder } = route.params;
@@ -266,7 +282,7 @@ const FAST = () => {
       >
         <View style={styles.accountInfo}>
           <View style={styles.initialsCircle}>
-            {item?.blr_image ? (<Image style={{ width: 37, height: 37 }} source={{ uri: item?.blr_image }} />) : (<Text style={styles.initials}>{initials}</Text>)}
+            <BillerAvatar billerId={item.id} initials={initials} />
           </View>
           <View style={styles.nameBlock}>
             <Text style={styles.accountName}>{item.name}</Text>
@@ -447,6 +463,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: 10,
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: 37,
+    height: 37,
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    resizeMode: "contain",
   },
   initials: {
     fontSize: 18,
