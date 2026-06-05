@@ -42,7 +42,7 @@ const DefaultBillerItem = ({ item, onPress, iconName = "receipt", iconColor = "#
     >
       <View style={styles.billerIconBox}>
         <Image 
-          source={{ uri: `https://assetcdn.lcrpay.com/biller-assets/${item.biller_id}.png` }} 
+          source={{ uri: `https://assetcdn.odhpay.com/biller-assets/${item.biller_id}.png` }}
           style={styles.billerImage}
           defaultSource={require("../../../assets/odh.png")}
         />
