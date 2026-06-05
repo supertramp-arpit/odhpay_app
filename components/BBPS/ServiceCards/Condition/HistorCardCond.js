@@ -83,7 +83,7 @@ const buildBillerNavParams = (uiInfo, { endpoint, reminder, billerId }) => {
     biller_id: resolvedBillerId,
     tagName: endpoint,
     iconImage: resolvedBillerId
-      ? `https://assetcdn.odhpay.com/biller-assets/${resolvedBillerId}.png`
+      ? `https://assetcdn.odhpay.com/biller-assets/${resolvedBillerId}.png?v=2`
       : "",
     doesSupportBillFetch: uiInfo?.doesSupportBillFetch,
     doesSupportUserInput: uiInfo?.doesSupportUserInput,

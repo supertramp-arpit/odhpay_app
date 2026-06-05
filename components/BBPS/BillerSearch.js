@@ -25,7 +25,7 @@ const BillerAvatar = ({ billerId, initials }) => {
     return (
       <Image
         style={styles.avatarImage}
-        source={{ uri: `https://assetcdn.odhpay.com/biller-assets/${billerId}.png` }}
+        source={{ uri: `https://assetcdn.odhpay.com/biller-assets/${billerId}.png?v=2` }}
         onError={() => setFailed(true)}
       />
     );
