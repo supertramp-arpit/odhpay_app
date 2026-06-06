@@ -21,7 +21,7 @@ const RechargeTrxPin = () => {
 
 
 
-  const { amount, mobile_number, recipient_name, circle, operator_code } = route.params.payload || {};
+  const { amount, mobile_number, recipient_name, circle, operator_code, circle_code } = route.params.payload || {};
   console.log("RechargeTrxPin route params", route.params.payload);
   const [commission, setCommission] = useState();
 
@@ -131,11 +131,12 @@ const RechargeTrxPin = () => {
           "purpose": "Payment",
           "mobile_number": normalizeIndianMobile(mobile_number),
           "recharge_data": {
-            "operator_code": "",
+            "operator_code": operator_code ? String(operator_code) : "",
             "mobile_number": normalizeIndianMobile(mobile_number),
             "operator_name": OperatorMap[recipient_name] || recipient_name,
             "recharge_type": "prepaid",
-            "circle": circle
+            "circle": circle,
+            "circle_code": circle_code || undefined,
           }
         },
       };

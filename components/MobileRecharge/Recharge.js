@@ -26,6 +26,7 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import OperatorPopup from "./OperatorPopup";
 import { useAppStore } from "../../store/useAppStore";
 import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const isSmallDevice = SCREEN_WIDTH < 375;
@@ -39,26 +40,61 @@ export const GlobalPlans = {
   lastUpdated: null,
 };
 
-const planToPack = (p, planId) => {
-  const getAttr = (tag) =>
-    (p.attributes || []).find((a) => a.tag?.toLowerCase() === tag.toLowerCase())?.value || null;
+// Plans now come from the backend /recharge/plans* endpoints which proxy
+// letsautomate.forum (PhonePe-backed). Each plan is already flat: {plan_id,
+// amount, description, validity, data, talktime, category, ...}.
+const planToPack = (p) => ({
+  planId: String(p.plan_id ?? `${p.amount}-${(p.description || "").slice(0, 24)}`),
+  price: Number(p.amount) || 0,
+  validity: p.validity || "NA",
+  data: p.data || (p.talktime ? `Talktime ₹${p.talktime}` : "-"),
+  description: p.description || "",
+  raw: p,
+});
 
-  const validity =
-    p.validityInDays && p.validityInDays > 0
-      ? `${p.validityInDays} Days`
-      : getAttr("Validity") || "NA";
+// Map the MNP operator_code (JIO/AIRTEL/AIRTELPRE/VI/BSNL) to the app's
+// hard-coded operator name + freecharge operatorId (kept so downstream
+// payment screens / commission lookup that key off operator_name still work).
+const OPERATOR_CODE_TO_LOCAL = {
+  JIO: { name: "Jio Prepaid", operatorId: 652 },
+  AIRTEL: { name: "Airtel Prepaid", operatorId: 650 },
+  AIRTELPRE: { name: "Airtel Prepaid", operatorId: 650 },
+  VI: { name: "Vi Prepaid", operatorId: 653 },
+  VIPRE: { name: "Vi Prepaid", operatorId: 653 },
+  VODAFONE: { name: "Vi Prepaid", operatorId: 653 },
+  IDEA: { name: "Vi Prepaid", operatorId: 653 },
+  BSNL: { name: "BSNL Prepaid", operatorId: 651 },
+};
 
-  const data =
-    p.data || getAttr("Data") || (p.talktime ? `Talktime Rs${p.talktime}` : "-");
+// Reverse: the OperatorPopup hands back the local display name (e.g. "Jio Prepaid").
+// We need the PhonePe code for /recharge/plans + the post-payment dispatch.
+const LOCAL_NAME_TO_OPERATOR_CODE = {
+  "jio prepaid": "JIO",
+  "airtel prepaid": "AIRTEL",
+  "vi prepaid": "VI",
+  "bsnl prepaid": "BSNL",
+};
 
-  return {
-    planId,
-    price: Number(p.amount),
-    validity,
-    data,
-    description: p.description || "",
-    raw: p,
-  };
+// CirclePopup yields a CircleName like "Delhi" / "UP East" but the recharge
+// plans API needs the short code. Map best-effort; anything missing falls
+// back to "DL" (BillAvenue accepts unknown circles, server-side maps to "All").
+const CIRCLE_NAME_TO_CODE = {
+  delhi: "DL", mumbai: "MU", maharashtra: "MH", kolkata: "KO",
+  chennai: "CH", karnataka: "KA", "tamil nadu": "TN", tamilnadu: "TN",
+  "andhra pradesh": "AP", telangana: "TG", gujarat: "GJ", gujrat: "GJ",
+  rajasthan: "RJ", "madhya pradesh": "MP", "west bengal": "WB",
+  bihar: "BR", jharkhand: "BR", odisha: "OR", orissa: "OR",
+  assam: "AS", "north east": "NE", northeast: "NE",
+  "j&k": "JK", "jammu kashmir": "JK", uttaranchal: "UC", uttarakhand: "UC",
+  "himachal pradesh": "HP", haryana: "HR", punjab: "PB", kerala: "KL",
+  "up east": "UP_EAST", "uttar pradesh east": "UP_EAST",
+  "utter pradesh (east)": "UP_EAST", "uttar pradesh (east)": "UP_EAST",
+  "up west": "UP_WEST", "uttar pradesh west": "UP_WEST",
+  "uttar pradesh (west)": "UP_WEST",
+};
+const toCircleCode = (name) => {
+  if (!name) return null;
+  return CIRCLE_NAME_TO_CODE[name.toString().toLowerCase().trim()] || null;
 };
 
 // Use Theme colors
@@ -137,118 +173,147 @@ const RechargeScreen = () => {
     setPlansVersion((v) => v + 1);
   };
 
-  /* ---- SIM mapping ---- */
-  const getSimProvider = async (mobile_no) => {
-    try {
-      setLoading(true);
-      let number = String(mobile_no || "").replace(/^\+91\s?/, "").replace(/\s+/g, "");
-      if (!number) return;
+  // Operator/circle codes from the new MNP API ("JIO", "UP_EAST"); needed for
+  // the /recharge/plans call and the post-payment recharge dispatch.
+  const [operatorCode, setOperatorCode] = useState(null);
+  const [circleCode, setCircleCode] = useState(null);
+  // Surface MNP failure so the UI can prompt the user to pick manually.
+  const [mnpFailed, setMnpFailed] = useState(false);
 
-      const headers = { "Content-Type": "application/json", Accept: "application/json" };
+  const authHeaders = async () => {
+    const token = await AsyncStorage.getItem("access_token");
+    return {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  };
 
-      const response = await axios.post(
-        `https://www.freecharge.in/api/fulfilment/nosession/fetch/operatorMapping`,
-        { serviceNumber: number, productCode: "MR" },
-        { headers }
-      );
-
-      const opId = response?.data?.data?.operatorId ?? null;
-      const cirId = response?.data?.data?.circleId ?? null;
-      setOperatorId(opId);
-      setCircleId(cirId);
-
-      resetPlans();
-      const billerResponse = await axios.get(
-        `https://www.freecharge.in/api/catalog/nosession/sub-category/SHORT_CODE/MR`
-      );
-      const billers = Array.isArray(billerResponse?.data?.data?.billers)
-        ? billerResponse.data.data.billers
-        : [];
-
-      const biller = billers.find((b) => Number(b.operatorMasterId) === Number(opId)) || null;
-      const circleObj = biller?.circles?.find((c) => Number(c.circleId) === Number(cirId)) || null;
-
+  const applyLocalOperator = (opCode, circleName) => {
+    const local = OPERATOR_CODE_TO_LOCAL[(opCode || "").toUpperCase()] || null;
+    if (local) {
       setSelectedOperator({
-        circle: circleObj?.circleName || operatorCircle?.circle,
-        operator: biller?.name || operatorCircle?.operator,
+        circle: circleName || operatorCircle?.circle,
+        operator: local.name,
       });
       setSelectedLogo(
-        operatorlistWithImg.find((item) => item.name.toLowerCase() === (biller?.name || "").toLowerCase())
-          ?.logo || null
+        operatorlistWithImg.find(
+          (item) => item.name.toLowerCase() === local.name.toLowerCase()
+        )?.logo || null
       );
-      if (opId && cirId) {
-        fetchPlans(opId, cirId);
-      }
-    } catch {
-      // keep UI quiet on mapping errors
-    } finally {
-      setLoading(false);
+      setOperatorId(local.operatorId);
     }
   };
 
-  useEffect(() => {
-    if (contactNumber) getSimProvider(contactNumber);
-  }, [contactNumber]);
-
-  /* ---- Fetch plans when ids ready ---- */
-  const fetchPlans = async (opId, cirId) => {
+  const loadPlansFromApi = async (opCode, ciCode) => {
+    if (!opCode || !ciCode) return;
     try {
-      console.log(opId, cirId)
       setLoading(true);
       resetPlans();
+      const headers = await authHeaders();
       const res = await axios.get(
-        `https://www.freecharge.in/rds/plans/${opId}/${cirId}/RlJFRUNIQVJHRV9WMnxBbW95bk1idWErUGVyK1pVSFZXUUhseE91RWREazRiNDJZRT0=`
+        `https://newapi.odhpay.com/recharge/plans?operator=${encodeURIComponent(opCode)}&circle=${encodeURIComponent(ciCode)}`,
+        { headers }
       );
-
-      const payload = res?.data?.data ?? null;
-      if (!payload) throw new Error("Invalid plans response.");
-
-      const { categoryDetails = [], planDetails = {} } = payload;
-
-      // console.log(opId, cirId, categoryDetails)
-      const planById = {};
-      Object.keys(planDetails).forEach((id) => (planById[id] = planDetails[id]));
-
-      const categoryToPlanIds = {};
-      const categoryList = [];
-      categoryDetails.forEach((c) => {
-        const ids = Array.isArray(c.planIds) ? c.planIds.map(String) : [];
-        categoryToPlanIds[c.category] = ids;
-        categoryList.push(c.category);
-      });
-
-      GlobalPlans.raw = payload;
-      GlobalPlans.planById = planById;
-      GlobalPlans.categoryToPlanIds = categoryToPlanIds;
-      GlobalPlans.categoryList = categoryList;
-      GlobalPlans.lastUpdated = Date.now();
-      setCategories(categoryList);
-
-      const preferred = ["Recommended", "Popular", "Unlimited", "Truly unlimited"];
-      const pick =
-        preferred.find((p) =>
-          categoryList.find((c) => c.toLowerCase() === p.toLowerCase())
-        ) || categoryList[0] || null;
-      setSelectedCat(pick);
-      setPlansVersion((v) => v + 1);
-
-      // set initial underline to active tab
-      setTimeout(() => moveUnderlineTo(pick), 0);
-    } catch {
-      // show empty state
+      const data = res?.data?.success ? res.data : res?.data?.data || res?.data || {};
+      const plansList = Array.isArray(data?.plans) ? data.plans : [];
+      ingestPlans(plansList);
+    } catch (err) {
+      console.log("plans fetch error", err?.response?.data || err?.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
+  // MNP + plans in one shot (server combines for us). Falls back to manual
+  // operator picker if MNP can't identify the number.
+  const getSimProvider = async (mobile_no) => {
+    try {
+      setLoading(true);
+      setMnpFailed(false);
+      const number = String(mobile_no || "").replace(/[^\d]/g, "").slice(-10);
+      if (number.length !== 10) return;
+
+      const headers = await authHeaders();
+      const response = await axios.get(
+        `https://newapi.odhpay.com/recharge/plans/mobile?mobile=${number}`,
+        { headers }
+      );
+      const body = response?.data?.data || response?.data || {};
+
+      if (!body?.operator_code) {
+        // MNP failed (no session / unknown number). Let the user pick manually.
+        setMnpFailed(true);
+        setTimeout(() => setModalVisible(true), 0);
+        return;
+      }
+
+      setOperatorCode(body.operator_code);
+      setCircleCode(body.circle_code);
+      applyLocalOperator(body.operator_code, body.circle);
+
+      // Plans come embedded if the combined endpoint succeeded; otherwise
+      // fetch them separately.
+      const plansList = Array.isArray(body?.plans) ? body.plans : [];
+      if (plansList.length) {
+        ingestPlans(plansList);
+      } else {
+        await loadPlansFromApi(body.operator_code, body.circle_code);
+      }
+    } catch (err) {
+      console.log("MNP error", err?.response?.data || err?.message);
+      setMnpFailed(true);
+      setTimeout(() => setModalVisible(true), 0);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Single place that pushes a flat plan list into the GlobalPlans cache
+  // grouped by category. Used by both the auto-MNP path and the operator-popup
+  // fallback path.
+  const ingestPlans = (plansList) => {
+    resetPlans();
+    const planById = {};
+    const categoryToPlanIds = {};
+    const order = [];
+
+    plansList.forEach((p, idx) => {
+      const pack = planToPack(p);
+      planById[pack.planId] = p;
+      const cat = (p.category || "All").toString();
+      if (!categoryToPlanIds[cat]) {
+        categoryToPlanIds[cat] = [];
+        order.push(cat);
+      }
+      categoryToPlanIds[cat].push(pack.planId);
+    });
+
+    GlobalPlans.raw = plansList;
+    GlobalPlans.planById = planById;
+    GlobalPlans.categoryToPlanIds = categoryToPlanIds;
+    GlobalPlans.categoryList = order;
+    GlobalPlans.lastUpdated = Date.now();
+    setCategories(order);
+
+    const preferred = ["Recommended", "Popular", "Unlimited", "Truly unlimited", "DATA", "All"];
+    const pick =
+      preferred.find((p) => order.find((c) => c.toLowerCase() === p.toLowerCase())) ||
+      order[0] ||
+      null;
+    setSelectedCat(pick);
+    setPlansVersion((v) => v + 1);
+    setTimeout(() => moveUnderlineTo(pick), 0);
+  };
+
   useEffect(() => {
-    if (operatorId && circleId) fetchPlans(operatorId, circleId);
-  }, [operatorId, circleId]);
+    if (contactNumber) getSimProvider(contactNumber);
+  }, [contactNumber]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    if (operatorId && circleId) fetchPlans(operatorId, circleId);
+    if (operatorCode && circleCode) loadPlansFromApi(operatorCode, circleCode);
     else if (contactNumber) getSimProvider(contactNumber);
     else setRefreshing(false);
   };
@@ -365,8 +430,9 @@ const RechargeScreen = () => {
           contactNumber,
           pack,
           img: selectedOperatorImage,
-          operator_code: operatorId,
-          circle: operatorCircle.circle,
+          operator_code: operatorCode || operatorId,
+          circle: operatorCircle?.circle,
+          circle_code: circleCode,
         })
       }
     >
@@ -415,6 +481,7 @@ const RechargeScreen = () => {
         onSelectOperator={(op) => {
           setModalVisible(false);
           resetPlans();
+          setMnpFailed(false);
           if (op?.operator) {
             setSelectedOperator({ operator: op.operator, circle: op.circle });
           }
@@ -422,9 +489,12 @@ const RechargeScreen = () => {
           if (op?.operatorId) setOperatorId(op.operatorId);
           if (op?.circleId) setCircleId(op.circleId);
 
-          if (op?.operatorId && op?.circleId) {
-            fetchPlans(op.operatorId, op.circleId);
-          }
+          // Resolve to the PhonePe/BillAvenue codes the new APIs need.
+          const opCode = LOCAL_NAME_TO_OPERATOR_CODE[(op?.operator || "").toLowerCase()] || null;
+          const ciCode = toCircleCode(op?.circle);
+          setOperatorCode(opCode);
+          setCircleCode(ciCode);
+          if (opCode && ciCode) loadPlansFromApi(opCode, ciCode);
         }}
       />
       

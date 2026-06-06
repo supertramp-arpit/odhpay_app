@@ -22,7 +22,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 const RechargeScreenPay = ({ route }) => {
   const navigation = useNavigation();
   const { operatorCircle } = useAppStore();
-  const { contactNumber, pack, img,circle,operator_code } = route.params || {};
+  const { contactNumber, pack, img, circle, operator_code, circle_code } = route.params || {};
   console.log("RechargeScreenPay route params", route.params);
   
 
@@ -91,8 +91,10 @@ const RechargeScreenPay = ({ route }) => {
                 amount: pack.price,
                 mobile_number: contactNumber,
                 recipient_name: operatorCircle.operator,
-                circle,operator_code 
-              }
+                circle,
+                operator_code,
+                circle_code,
+              },
             })
           }
         >
