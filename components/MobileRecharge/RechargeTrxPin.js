@@ -19,14 +19,9 @@ const OPERATOR_LOGOS = {
   vodafone: require("../../assets/vi.png"),
   bsnl: require("../../assets/bsnl2.png"),
 };
-const OPERATOR_GRADIENTS = {
-  jio: ["#1F3A8A", "#1E40AF"],
-  airtel: ["#E11D48", "#9F1239"],
-  vi: ["#7C3AED", "#DB2777"],
-  vodafone: ["#7C3AED", "#DB2777"],
-  bsnl: ["#0EA5E9", "#0369A1"],
-  default: [Theme.colors.primary, Theme.colors.primary],
-};
+// Hero stays on-brand (monochrome) so it lives in the same visual family as
+// every other screen — the operator logo provides the splash of colour.
+const HERO_GRADIENT = ["#1A1A1A", "#000000"];
 const operatorKey = (name) => {
   const s = (name || "").toLowerCase();
   if (s.includes("jio")) return "jio";
@@ -50,7 +45,6 @@ const RechargeTrxPin = () => {
 
   const opKey = useMemo(() => operatorKey(recipient_name), [recipient_name]);
   const opLogo = OPERATOR_LOGOS[opKey];
-  const opGradient = OPERATOR_GRADIENTS[opKey] || OPERATOR_GRADIENTS.default;
 
   const fetchWalletBalance = async () => {
     try {
@@ -263,7 +257,7 @@ const RechargeTrxPin = () => {
       >
         {/* Hero: operator gradient with logo + mobile */}
         <LinearGradient
-          colors={opGradient}
+          colors={HERO_GRADIENT}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={styles.hero}
         >
@@ -392,32 +386,32 @@ const RechargeTrxPin = () => {
 
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F4F6FA" },
+  safe: { flex: 1, backgroundColor: Theme.colors.background },
   container: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 32 },
-  errorText: { color: "#d9534f", textAlign: "center", marginTop: 20, fontSize: 16 },
+  errorText: { color: Theme.colors.danger, textAlign: "center", marginTop: 20, fontSize: 16 },
 
-  /* Hero */
+  /* Hero — dark/primary so it stays consistent with the rest of the app */
   hero: {
     borderRadius: 20,
     padding: 18,
     shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
   heroRow: { flexDirection: "row", alignItems: "center" },
   heroLogoWrap: {
     width: 56, height: 56, borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "#FFF",
     justifyContent: "center", alignItems: "center",
     overflow: "hidden",
   },
   heroLogo: { width: 40, height: 40, resizeMode: "contain" },
   heroOperator: { color: "#FFF", fontSize: 16, fontWeight: "800" },
   heroNumber: { color: "#FFF", fontSize: 15, fontWeight: "600", marginTop: 2, letterSpacing: 0.4 },
-  heroCircle: { color: "rgba(255,255,255,0.8)", fontSize: 12, marginTop: 2 },
+  heroCircle: { color: "rgba(255,255,255,0.7)", fontSize: 12, marginTop: 2 },
   heroAmountRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -425,45 +419,48 @@ const styles = StyleSheet.create({
     marginTop: 18,
     paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.2)",
+    borderTopColor: "rgba(255,255,255,0.15)",
   },
-  heroAmountLabel: { color: "rgba(255,255,255,0.85)", fontSize: 12, fontWeight: "600" },
+  heroAmountLabel: { color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: "600" },
   heroAmount: { color: "#FFF", fontSize: 28, fontWeight: "900" },
 
   /* Cards */
   card: {
-    backgroundColor: "#FFF",
+    backgroundColor: Theme.colors.surface,
     borderRadius: 16,
     padding: 16,
     marginTop: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    ...Platform.select({ android: { elevation: 1 } }),
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
   },
-  cardTitle: { fontSize: 13, fontWeight: "700", color: "#64748B", marginBottom: 12, letterSpacing: 0.3, textTransform: "uppercase" },
+  cardTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Theme.colors.textSecondary,
+    marginBottom: 12,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  rowLabel: { fontSize: 14, color: "#475569" },
-  rowValue: { fontSize: 14, color: "#0F172A", fontWeight: "600" },
-  divider: { height: 1, backgroundColor: "#E2E8F0", marginVertical: 8 },
-  totalLabel: { fontSize: 15, color: "#0F172A", fontWeight: "700" },
+  rowLabel: { fontSize: 14, color: Theme.colors.textSecondary },
+  rowValue: { fontSize: 14, color: Theme.colors.text, fontWeight: "600" },
+  divider: { height: 1, backgroundColor: Theme.colors.border, marginVertical: 8 },
+  totalLabel: { fontSize: 15, color: Theme.colors.text, fontWeight: "700" },
   totalValue: { fontSize: 18, color: Theme.colors.primary, fontWeight: "900" },
 
   /* Payment method */
   payMethodRow: { flexDirection: "row", alignItems: "center" },
   payMethodIcon: {
     width: 42, height: 42, borderRadius: 21,
-    backgroundColor: Theme.colors.primary,
+    backgroundColor: Theme.colors.inputBg,
     alignItems: "center", justifyContent: "center",
   },
-  payMethodName: { fontSize: 15, fontWeight: "700", color: "#0F172A" },
-  payMethodSub: { fontSize: 12, color: "#64748B", marginTop: 2 },
+  payMethodName: { fontSize: 15, fontWeight: "700", color: Theme.colors.text },
+  payMethodSub: { fontSize: 12, color: Theme.colors.textSecondary, marginTop: 2 },
   selectedDot: {
-    width: 20, height: 20, borderRadius: 10,
+    width: 18, height: 18, borderRadius: 9,
     backgroundColor: Theme.colors.primary,
-    borderWidth: 4, borderColor: "#FFF",
-    shadowColor: Theme.colors.primary, shadowOpacity: 0.4, shadowRadius: 4,
+    borderWidth: 3, borderColor: "#FFF",
   },
   warnRow: {
     flexDirection: "row", alignItems: "center",
@@ -478,16 +475,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 16, gap: 6,
   },
-  safetyText: { color: "#475569", fontSize: 12, fontWeight: "500" },
+  safetyText: { color: Theme.colors.textSecondary, fontSize: 12, fontWeight: "500" },
 
   /* Sticky footer */
   footer: {
     flexDirection: "row", alignItems: "center",
-    backgroundColor: "#FFF",
+    backgroundColor: Theme.colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
+    borderTopColor: Theme.colors.border,
     shadowColor: "#000",
     shadowOpacity: 0.06,
     shadowRadius: 8,
@@ -495,20 +492,20 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   footerLeft: { flex: 1 },
-  footerLeftLabel: { fontSize: 11, color: "#64748B", fontWeight: "600", textTransform: "uppercase" },
-  footerLeftAmount: { fontSize: 22, color: "#0F172A", fontWeight: "900", marginTop: 2 },
+  footerLeftLabel: { fontSize: 11, color: Theme.colors.textSecondary, fontWeight: "600", textTransform: "uppercase" },
+  footerLeftAmount: { fontSize: 22, color: Theme.colors.text, fontWeight: "900", marginTop: 2 },
   payBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     backgroundColor: Theme.colors.primary,
     paddingHorizontal: 22, paddingVertical: 14,
     borderRadius: 14, gap: 8,
-    shadowColor: Theme.colors.primary,
-    shadowOpacity: 0.35,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
-  payBtnDisabled: { backgroundColor: "#94A3B8", shadowOpacity: 0 },
+  payBtnDisabled: { backgroundColor: Theme.colors.textLight, shadowOpacity: 0 },
   payBtnText: { color: "#FFF", fontSize: 15, fontWeight: "800", letterSpacing: 0.3 },
 });
 
