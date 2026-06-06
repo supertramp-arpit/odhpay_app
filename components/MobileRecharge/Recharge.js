@@ -16,7 +16,6 @@ import {
   ActivityIndicator,
   FlatList,
   RefreshControl,
-  Animated,
   StatusBar,
   Dimensions,
 } from "react-native";
@@ -141,11 +140,6 @@ const RechargeScreen = () => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // animated underline for tabs
-  const underlineX = useRef(new Animated.Value(0)).current;
-  const underlineW = useRef(new Animated.Value(0)).current;
-  const tabRefs = useRef({}); // store x & w for each tab
-
   // keep a ref to the search input so it never loses focus
   const searchRef = useRef(null);
 
@@ -178,9 +172,6 @@ const RechargeScreen = () => {
     setSelectedCat(null);
     setQuery("");
     setCategories([]);
-    tabRefs.current = {};
-    underlineX.setValue(0);
-    underlineW.setValue(0);
     setPlansVersion((v) => v + 1);
   };
 
@@ -331,7 +322,6 @@ const RechargeScreen = () => {
       null;
     setSelectedCat(pick);
     setPlansVersion((v) => v + 1);
-    setTimeout(() => moveUnderlineTo(pick), 0);
   };
 
   useEffect(() => {
@@ -406,27 +396,12 @@ const RechargeScreen = () => {
   }, [filteredPack, query]);
 
   /* ---------------- UI parts ---------------- */
-  const moveUnderlineTo = (category) => {
-    const meta = tabRefs.current[category];
-    if (!meta) return;
-    Animated.spring(underlineX, { toValue: meta.x, useNativeDriver: false, tension: 180, friction: 18 }).start();
-    Animated.spring(underlineW, { toValue: meta.w, useNativeDriver: false, tension: 180, friction: 18 }).start();
-  };
-
   const TabChip = ({ category }) => {
     const active = selectedCat === category;
     return (
       <TouchableOpacity
-        onLayout={(e) => {
-          const { x, width } = e.nativeEvent.layout;
-          tabRefs.current[category] = { x, w: width };
-          if (active) moveUnderlineTo(category);
-        }}
-        onPress={() => {
-          setSelectedCat(category);
-          moveUnderlineTo(category);
-        }}
-        activeOpacity={0.9}
+        onPress={() => setSelectedCat(category)}
+        activeOpacity={0.85}
         style={[styles.tabBtn, active && styles.tabBtnActive]}
       >
         <Text style={[styles.tabText, active && styles.tabTextActive]} numberOfLines={1}>
@@ -436,62 +411,108 @@ const RechargeScreen = () => {
     );
   };
 
-  // SINGLE-LINE validity + per-day data (truncates gracefully)
-  const InlineInfo = ({ validity, data }) => (
-    <Text style={styles.inlineInfo} numberOfLines={1} ellipsizeMode="tail">
-      <Text style={styles.inlineLabel}>Validity: </Text>
-      <Text style={styles.inlineValue}>{validity || "—"}</Text>
-      <Text>   •   </Text>
-      <Text style={styles.inlineLabel}>Data: </Text>
-      <Text style={styles.inlineValue}>{data || "—"}</Text>
-    </Text>
-  );
+  // The upstream stuffs "⚠️ Plan unavailable! Recharge with Rs. X instead"
+  // into the description. We pull that out so the user sees a tidy warning
+  // pill instead of a wall of grey text.
+  const isUnavailableDesc = (s) => !!s && /^\s*⚠/.test(s);
+  const stripWarn = (s) =>
+    (s || "").replace(/^\s*⚠️?\s*/, "").trim();
 
-  const PlanCard = ({ pack }) => (
-    <TouchableOpacity
-      activeOpacity={0.92}
-      style={styles.planCard}
-      onPress={() =>
-        navigation.navigate("RechargeScreenPay", {
-          contactName,
-          contactNumber,
-          pack,
-          img: selectedOperatorImage,
-          operator_code: operatorCode || operatorId,
-          circle: operatorCircle?.circle,
-          circle_code: circleCode,
-        })
-      }
+  const InfoChip = ({ icon, label, value, tone = "neutral" }) => (
+    <View
+      style={[
+        styles.infoChip,
+        tone === "primary" && styles.infoChipPrimary,
+      ]}
     >
-      <View style={styles.cardTop}>
-        <View style={styles.priceBadge}>
-          <Text style={styles.priceBadgeText}>₹{pack.price}</Text>
-        </View>
-        <View style={{ flex: 1, marginLeft: 12 }}>
-          <InlineInfo validity={pack.validity} data={pack.data} />
-          {!!pack.description && <Text style={styles.desc} numberOfLines={3}>{pack.description}</Text>}
-        </View>
-        <MaterialIcons name="chevron-right" size={22} color={COLORS.subtext} />
-      </View>
-
-      {/* tiny tag showing where it came from when searching globally */}
-      {!!query.trim() && !!pack._cat && (
-        <View style={styles.catTag}>
-          <Text style={styles.catTagText}>{pack._cat}</Text>
-        </View>
-      )}
-    </TouchableOpacity>
+      <Ionicons
+        name={icon}
+        size={12}
+        color={tone === "primary" ? COLORS.primary : COLORS.subtext}
+        style={{ marginRight: 4 }}
+      />
+      <Text style={styles.infoChipLabel}>{label}</Text>
+      <Text style={[styles.infoChipValue, tone === "primary" && { color: COLORS.primary }]}>
+        {value || "—"}
+      </Text>
+    </View>
   );
+
+  const PlanCard = ({ pack }) => {
+    const unavailable = isUnavailableDesc(pack.description);
+    const hasValidity = pack.validity && pack.validity !== "NA";
+    const hasData = pack.data && pack.data !== "-";
+    return (
+      <TouchableOpacity
+        activeOpacity={0.92}
+        style={[styles.planCard, unavailable && styles.planCardMuted]}
+        onPress={() =>
+          navigation.navigate("RechargeScreenPay", {
+            contactName,
+            contactNumber,
+            pack,
+            img: selectedOperatorImage,
+            operator_code: operatorCode || operatorId,
+            circle: operatorCircle?.circle,
+            circle_code: circleCode,
+          })
+        }
+      >
+        <View style={styles.cardRow}>
+          <View style={styles.priceBlock}>
+            <Text style={styles.priceCurrency}>₹</Text>
+            <Text style={styles.priceValue}>{pack.price}</Text>
+          </View>
+          <View style={styles.cardBody}>
+            {(hasValidity || hasData) && (
+              <View style={styles.chipsRow}>
+                {hasValidity && (
+                  <InfoChip
+                    icon="time-outline"
+                    label="Validity"
+                    value={pack.validity}
+                    tone="primary"
+                  />
+                )}
+                {hasData && (
+                  <InfoChip
+                    icon="cellular-outline"
+                    label="Data"
+                    value={pack.data}
+                  />
+                )}
+              </View>
+            )}
+            {!!pack.description && !unavailable && (
+              <Text style={styles.desc} numberOfLines={2}>{pack.description}</Text>
+            )}
+            {unavailable && (
+              <View style={styles.warnBox}>
+                <Ionicons name="alert-circle" size={14} color="#B45309" style={{ marginRight: 6 }} />
+                <Text style={styles.warnText} numberOfLines={2}>{stripWarn(pack.description)}</Text>
+              </View>
+            )}
+            {!!query.trim() && !!pack._cat && (
+              <View style={styles.catTag}>
+                <Text style={styles.catTagText}>{pack._cat}</Text>
+              </View>
+            )}
+          </View>
+          <MaterialIcons name="chevron-right" size={22} color={COLORS.subtext} />
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   const SkeletonCard = () => (
     <View style={styles.planCard}>
-      <View style={styles.cardTop}>
-        <View style={[styles.priceBadge, { backgroundColor: "#EEE" }]}>
-          <View style={{ width: 48, height: 16, backgroundColor: "#E6E6E6", borderRadius: 6 }} />
+      <View style={styles.cardRow}>
+        <View style={[styles.priceBlock, { backgroundColor: "#F0F0F0" }]}>
+          <View style={{ width: 36, height: 22, backgroundColor: "#E6E6E6", borderRadius: 6 }} />
         </View>
-        <View style={{ flex: 1, marginLeft: 12 }}>
-          <View style={{ height: 14, backgroundColor: "#EEE", borderRadius: 6, marginBottom: 6 }} />
-          <View style={{ height: 12, backgroundColor: "#EEE", borderRadius: 6, width: "70%" }} />
+        <View style={styles.cardBody}>
+          <View style={{ height: 22, backgroundColor: "#EEE", borderRadius: 11, marginBottom: 6, width: "60%" }} />
+          <View style={{ height: 12, backgroundColor: "#EEE", borderRadius: 6, width: "85%" }} />
         </View>
       </View>
     </View>
@@ -611,7 +632,7 @@ const RechargeScreen = () => {
             </View>
           )}
 
-          {/* ----- Category Tabs with animated underline ----- */}
+          {/* ----- Category Tabs ----- */}
           <View style={styles.tabsWrap}>
             <ScrollView
               horizontal
@@ -622,12 +643,6 @@ const RechargeScreen = () => {
               {categories.map((c) => (
                 <TabChip key={c} category={c} />
               ))}
-              <Animated.View
-                style={[
-                  styles.underline,
-                  { transform: [{ translateX: underlineX }], width: underlineW },
-                ]}
-              />
             </ScrollView>
           </View>
 
@@ -843,111 +858,151 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
 
-  /* Category Tabs */
+  /* Category Tabs — pill style, no underline */
   tabsWrap: {
     marginTop: 14,
     paddingBottom: 6,
   },
   tabsScroll: {
     paddingHorizontal: 16,
-    gap: 10,
-    position: "relative",
+    gap: 8,
   },
   tabBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
     backgroundColor: COLORS.cardBg,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.border,
   },
   tabBtnActive: {
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-  tabText: { 
-    fontSize: 13, 
-    color: COLORS.subtext, 
+  tabText: {
+    fontSize: 13,
+    color: COLORS.subtext,
     fontWeight: "600",
   },
-  tabTextActive: { 
-    color: COLORS.primary,
+  tabTextActive: {
+    color: "#FFF",
     fontWeight: "700",
   },
-  underline: {
-    position: "absolute",
-    height: 3,
-    backgroundColor: COLORS.primary,
-    bottom: 0,
-    left: 16,
-    borderRadius: 2,
-  },
 
-  /* Plan Cards */
+  /* Plan Cards — modern, breathable */
   listContent: {
     paddingBottom: 80,
-    paddingTop: 6,
+    paddingTop: 8,
   },
   skeletonContainer: {
     paddingHorizontal: 16,
   },
   planCard: {
     backgroundColor: COLORS.cardBg,
-    padding: 16,
-    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 16,
     marginHorizontal: 16,
-    marginVertical: 6,
+    marginVertical: 5,
     borderWidth: 1,
     borderColor: COLORS.border,
     shadowColor: "#000",
     shadowOpacity: 0.04,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
-  cardTop: { 
-    flexDirection: "row", 
-    alignItems: "flex-start",
+  planCardMuted: {
+    opacity: 0.85,
   },
-
-  priceBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-    backgroundColor: COLORS.primaryLight,
-    alignSelf: "flex-start",
-    minWidth: 70,
+  cardRow: {
+    flexDirection: "row",
     alignItems: "center",
   },
-  priceBadgeText: { fontSize: 18, fontWeight: "800", color: COLORS.primary },
-
-  inlineInfo: {
-    fontSize: 13,
-    color: COLORS.text,
-    fontWeight: "500",
-    flexShrink: 1,
-    lineHeight: 20,
+  priceBlock: {
+    minWidth: 84,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
   },
-  inlineLabel: {
+  priceCurrency: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: COLORS.primary,
+    marginRight: 1,
+    marginTop: 4,
+  },
+  priceValue: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: COLORS.primary,
+    lineHeight: 26,
+  },
+  cardBody: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 4,
+  },
+  chipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 6,
+  },
+  infoChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F4F4F6",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  infoChipPrimary: {
+    backgroundColor: COLORS.primaryLight,
+  },
+  infoChipLabel: {
+    fontSize: 11,
     color: COLORS.subtext,
-    fontWeight: "500",
+    fontWeight: "600",
+    marginRight: 4,
   },
-  inlineValue: {
+  infoChipValue: {
+    fontSize: 11,
     color: COLORS.text,
     fontWeight: "700",
   },
 
-  desc: { fontSize: 12, color: COLORS.subtext, lineHeight: 18, marginTop: 8 },
+  desc: { fontSize: 12.5, color: COLORS.subtext, lineHeight: 18 },
+
+  warnBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#FEF3C7",
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  warnText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#92400E",
+    fontWeight: "600",
+    lineHeight: 16,
+  },
 
   catTag: {
     alignSelf: "flex-start",
-    marginTop: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    marginTop: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderRadius: 8,
     backgroundColor: COLORS.primaryLight,
   },
-  catTagText: { fontSize: 11, fontWeight: "700", color: COLORS.primary },
+  catTagText: { fontSize: 10, fontWeight: "700", color: COLORS.primary, letterSpacing: 0.2 },
 
   /* Empty State */
   emptyWrap: { 
