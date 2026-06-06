@@ -119,7 +119,7 @@ const RechargeTrxPin = () => {
       };
 
       const { data } = await axios.post(
-        "https://newapi.odhpay.com/wallet/pay-service",
+        "https://newapi.odhpay.com/api/v1/wallet/pay-service",
         payload,
         { headers }
       );
