@@ -465,8 +465,8 @@ const MobilePrepaid = () => {
           onPress={() => navigateWithNumber("Unknown", unknownProceedDigits)}
           activeOpacity={0.8}
         >
-          <View style={[styles.avatar, { backgroundColor: "#9CA3AF" }]}>
-            <Text style={styles.avatarText}>?</Text>
+          <View style={[styles.avatar, { backgroundColor: Theme.colors.primary || "#5F259F" }]}>
+            <Ionicons name="phone-portrait-outline" size={22} color="#FFF" />
           </View>
           <View style={styles.contactInfo}>
             <Text style={styles.contactName}>Unknown Number</Text>
