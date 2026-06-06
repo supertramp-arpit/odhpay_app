@@ -19,9 +19,16 @@ const OPERATOR_LOGOS = {
   vodafone: require("../../assets/vi.png"),
   bsnl: require("../../assets/bsnl2.png"),
 };
-// Hero stays on-brand (monochrome) so it lives in the same visual family as
-// every other screen — the operator logo provides the splash of colour.
-const HERO_GRADIENT = ["#1A1A1A", "#000000"];
+// Each operator gets its own brand-tinted theme so the whole pay flow reflects
+// the network being recharged (hero gradient + CTA + accents). White text is
+// kept readable by keeping every gradient deep. `default` is the ODH violet.
+const OPERATOR_THEME = {
+  jio:     { gradient: ["#3B4BDB", "#161E6B"], accentGradient: ["#3B4BDB", "#1B2580"], accent: "#1E2A8F" },
+  airtel:  { gradient: ["#ED1C24", "#8E060D"], accentGradient: ["#F23842", "#C20912"], accent: "#D81019" },
+  vi:      { gradient: ["#E11D48", "#7A0E3A"], accentGradient: ["#F43F6B", "#B01243"], accent: "#D11247" },
+  bsnl:    { gradient: ["#0E76BC", "#063F73"], accentGradient: ["#1C8AD6", "#075897"], accent: "#0B6AAA" },
+  default: { gradient: ["#312E81", "#6D28D9", "#7C3AED"], accentGradient: ["#4F46E5", "#7C3AED"], accent: "#6D28D9" },
+};
 const operatorKey = (name) => {
   const s = (name || "").toLowerCase();
   if (s.includes("jio")) return "jio";
@@ -45,6 +52,7 @@ const RechargeTrxPin = () => {
 
   const opKey = useMemo(() => operatorKey(recipient_name), [recipient_name]);
   const opLogo = OPERATOR_LOGOS[opKey];
+  const theme = OPERATOR_THEME[opKey] || OPERATOR_THEME.default;
 
   const fetchWalletBalance = async () => {
     try {
@@ -257,7 +265,7 @@ const RechargeTrxPin = () => {
       >
         {/* Hero: operator gradient with logo + mobile */}
         <LinearGradient
-          colors={HERO_GRADIENT}
+          colors={theme.gradient}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={styles.hero}
         >
@@ -279,7 +287,13 @@ const RechargeTrxPin = () => {
           </View>
 
           <View style={styles.heroAmountRow}>
-            <Text style={styles.heroAmountLabel}>Recharge amount</Text>
+            <View>
+              <Text style={styles.heroAmountLabel}>Recharge amount</Text>
+              <View style={styles.heroTag}>
+                <Ionicons name="flash" size={11} color="#FDE68A" />
+                <Text style={styles.heroTagText}>Instant recharge</Text>
+              </View>
+            </View>
             <Text style={styles.heroAmount}>₹{Number(amount).toFixed(0)}</Text>
           </View>
         </LinearGradient>
@@ -318,7 +332,7 @@ const RechargeTrxPin = () => {
           <View style={styles.divider} />
           <View style={styles.row}>
             <Text style={styles.totalLabel}>Total payable</Text>
-            <Text style={styles.totalValue}>₹{finalAmount.toFixed(2)}</Text>
+            <Text style={[styles.totalValue, { color: theme.accent }]}>₹{finalAmount.toFixed(2)}</Text>
           </View>
         </View>
 
@@ -326,9 +340,13 @@ const RechargeTrxPin = () => {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Pay using</Text>
           <View style={styles.payMethodRow}>
-            <View style={styles.payMethodIcon}>
+            <LinearGradient
+              colors={theme.accentGradient}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={styles.payMethodIcon}
+            >
               <Ionicons name="wallet" size={22} color="#FFF" />
-            </View>
+            </LinearGradient>
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={styles.payMethodName}>ODH Wallet</Text>
               <Text style={styles.payMethodSub}>
@@ -337,7 +355,9 @@ const RechargeTrxPin = () => {
                   : "Fetching balance…"}
               </Text>
             </View>
-            <View style={styles.selectedDot} />
+            <View style={[styles.selectedDot, { backgroundColor: theme.accent }]}>
+              <Ionicons name="checkmark" size={13} color="#FFF" />
+            </View>
           </View>
           {lowBalance && (
             <View style={styles.warnRow}>
@@ -351,7 +371,7 @@ const RechargeTrxPin = () => {
 
         {/* Safety note */}
         <View style={styles.safetyRow}>
-          <Ionicons name="shield-checkmark" size={14} color="#10B981" />
+          <Ionicons name="shield-checkmark" size={15} color="#059669" />
           <Text style={styles.safetyText}>
             100% secure recharge via BBPS. Refunded if it fails.
           </Text>
@@ -365,11 +385,16 @@ const RechargeTrxPin = () => {
           <Text style={styles.footerLeftAmount}>₹{finalAmount.toFixed(2)}</Text>
         </View>
         <TouchableOpacity
-          style={[styles.payBtn, (loading || lowBalance) && styles.payBtnDisabled]}
+          style={[styles.payBtnWrap, (loading || lowBalance) && styles.payBtnDisabled]}
           onPress={handlePaymentGateway}
           disabled={loading || lowBalance}
           activeOpacity={0.85}
         >
+          <LinearGradient
+            colors={(loading || lowBalance) ? ["#C7CBD1", "#C7CBD1"] : theme.accentGradient}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            style={styles.payBtn}
+          >
           {loading ? (
             <ActivityIndicator color="#FFF" />
           ) : (
@@ -378,6 +403,7 @@ const RechargeTrxPin = () => {
               <Ionicons name="arrow-forward" size={18} color="#FFF" />
             </>
           )}
+          </LinearGradient>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -422,16 +448,31 @@ const styles = StyleSheet.create({
     borderTopColor: "rgba(255,255,255,0.15)",
   },
   heroAmountLabel: { color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: "600" },
-  heroAmount: { color: "#FFF", fontSize: 28, fontWeight: "900" },
+  heroAmount: { color: "#FFF", fontSize: 30, fontWeight: "900", letterSpacing: 0.3 },
+  heroTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255,255,255,0.16)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    marginTop: 6,
+    gap: 4,
+  },
+  heroTagText: { color: "#FFF", fontSize: 10.5, fontWeight: "700", letterSpacing: 0.2 },
 
   /* Cards */
   card: {
     backgroundColor: Theme.colors.surface,
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 16,
     marginTop: 14,
-    borderWidth: 1,
-    borderColor: Theme.colors.border,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
   },
   cardTitle: {
     fontSize: 12,
@@ -451,16 +492,19 @@ const styles = StyleSheet.create({
   /* Payment method */
   payMethodRow: { flexDirection: "row", alignItems: "center" },
   payMethodIcon: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: Theme.colors.inputBg,
+    width: 44, height: 44, borderRadius: 22,
     alignItems: "center", justifyContent: "center",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
   payMethodName: { fontSize: 15, fontWeight: "700", color: Theme.colors.text },
   payMethodSub: { fontSize: 12, color: Theme.colors.textSecondary, marginTop: 2 },
   selectedDot: {
-    width: 18, height: 18, borderRadius: 9,
-    backgroundColor: Theme.colors.primary,
-    borderWidth: 3, borderColor: "#FFF",
+    width: 22, height: 22, borderRadius: 11,
+    alignItems: "center", justifyContent: "center",
   },
   warnRow: {
     flexDirection: "row", alignItems: "center",
@@ -494,18 +538,21 @@ const styles = StyleSheet.create({
   footerLeft: { flex: 1 },
   footerLeftLabel: { fontSize: 11, color: Theme.colors.textSecondary, fontWeight: "600", textTransform: "uppercase" },
   footerLeftAmount: { fontSize: 22, color: Theme.colors.text, fontWeight: "900", marginTop: 2 },
-  payBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    backgroundColor: Theme.colors.primary,
-    paddingHorizontal: 22, paddingVertical: 14,
-    borderRadius: 14, gap: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+  payBtnWrap: {
+    borderRadius: 14,
+    overflow: "hidden",
+    shadowColor: "#4F46E5",
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
     elevation: 6,
   },
-  payBtnDisabled: { backgroundColor: Theme.colors.textLight, shadowOpacity: 0 },
+  payBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 22, paddingVertical: 15,
+    gap: 8,
+  },
+  payBtnDisabled: { shadowOpacity: 0, elevation: 0 },
   payBtnText: { color: "#FFF", fontSize: 15, fontWeight: "800", letterSpacing: 0.3 },
 });
 
