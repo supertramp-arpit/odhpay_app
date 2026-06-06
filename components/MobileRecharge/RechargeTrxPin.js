@@ -131,27 +131,35 @@ const RechargeTrxPin = () => {
 
 
   // Poll /wallet/service-status until the background recharge resolves.
-  // Returns the last seen status payload — caller decides what to show.
-  // Bounded so a stuck BillAvenue call doesn't hang the UI forever; the
-  // backend will keep processing and FCM will surface the final outcome.
+  // First 5 polls happen every 500ms (catches the common ~2s BillAvenue
+  // round-trip), then we slow down to 1s for another 20 polls. Total budget
+  // ~22.5s — plenty for a normal recharge, and the success screen handles
+  // "pending" gracefully if BillAvenue is unusually slow (FCM will correct
+  // it once the dispatch finally lands).
   const pollRechargeStatus = async (referenceId, headers) => {
     if (!referenceId) return { service_status: "pending" };
     const STATUS_URL = `https://newapi.odhpay.com/api/v1/wallet/service-status/${referenceId}`;
     const TERMINAL = new Set(["completed", "failed"]);
-    const MAX_ATTEMPTS = 12; // ~12s total at 1s spacing
-    const SLEEP_MS = 1000;
+
+    // [intervalMs, count]
+    const phases = [
+      [500, 6],   // first 3s, tight polling
+      [1000, 20], // next 20s, gentler
+    ];
 
     let last = { service_status: "pending" };
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      try {
-        const { data } = await axios.get(STATUS_URL, { headers });
-        last = data || last;
-        if (TERMINAL.has((data?.service_status || "").toLowerCase())) return data;
-      } catch (e) {
-        // Transient errors are fine — keep polling until budget runs out.
-        console.log("status poll attempt failed", attempt, e?.message);
+    for (const [delay, count] of phases) {
+      for (let i = 0; i < count; i++) {
+        try {
+          const { data } = await axios.get(STATUS_URL, { headers });
+          last = data || last;
+          if (TERMINAL.has((data?.service_status || "").toLowerCase())) return data;
+        } catch (e) {
+          // Transient errors are fine — keep polling until budget runs out.
+          console.log("status poll attempt failed", e?.message);
+        }
+        await new Promise((r) => setTimeout(r, delay));
       }
-      await new Promise((r) => setTimeout(r, SLEEP_MS));
     }
     return last;
   };

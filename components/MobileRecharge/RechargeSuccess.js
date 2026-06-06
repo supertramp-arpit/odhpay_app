@@ -61,24 +61,38 @@ const RechargeSuccess = () => {
     RechargeStatus = "",
   } = route.params || {};
 
-  // In a real app, these would come from route params or API
-const transactionDetails = {
-  status:
-    RechargeStatus.toLowerCase() === "success"
-      ? "Recharge successful"
-      : "Recharge Failed",
-  timestamp: moment(responseData.transaction_date).format(
-    "hh:mm a on DD MMM YYYY"
-  ),
-  provider: recipient_name,
-  number: mobile_number,
-  amount: amount,
-  platformFee: 3,
-  transactionId: "NX250302122516459444463321",
-  referenceId: responseData.bbps_reference_no || "N/A",
-  debitedFrom: `XXX${user?.user?.MobileNumber?.slice(-4) || "XXXX"}`,
-  utr: "598867981302",
-};
+  // Recharge can land in three states from the polling loop in RechargeTrxPin:
+  //   success  → BillAvenue confirmed completed
+  //   failed   → terminal failure, wallet refunded
+  //   pending  → background dispatch hasn't finalized within the poll window;
+  //              will be confirmed via FCM/status check shortly. Treat this as
+  //              an OK-ish state, NOT failed — the user paid and the recharge
+  //              is likely already done at the operator's end.
+  const statusKey = (RechargeStatus || "").toLowerCase();
+  const isSuccess = statusKey === "success";
+  const isFailed = statusKey === "failed";
+  const isPending = !isSuccess && !isFailed;
+
+  const statusUI = isSuccess
+    ? { label: "Recharge successful", bg: Theme.colors.success || "#10B981", glyph: "✓", glyphColor: "green" }
+    : isFailed
+    ? { label: "Recharge Failed", bg: Theme.colors.danger, glyph: "✗", glyphColor: "red" }
+    : { label: "Recharge in process", bg: "#F59E0B", glyph: "⏱", glyphColor: "#92400E" };
+
+  const transactionDetails = {
+    status: statusUI.label,
+    timestamp: moment(responseData.transaction_date).format(
+      "hh:mm a on DD MMM YYYY"
+    ),
+    provider: recipient_name,
+    number: mobile_number,
+    amount: amount,
+    platformFee: 3,
+    transactionId: "NX250302122516459444463321",
+    referenceId: responseData.bbps_reference_no || "N/A",
+    debitedFrom: `XXX${user?.user?.MobileNumber?.slice(-4) || "XXXX"}`,
+    utr: "598867981302",
+  };
 
   const handleShare = async () => {
     // Simple share using react-native Share API
@@ -103,29 +117,20 @@ Date: ${moment(responseData.transaction_date).format("DD MMM YYYY hh:mm a")}`,
       <View
         style={{ backgroundColor: "#fff" }}
       >
-        <View
-          style={[
-            styles.header,
-            {
-              backgroundColor:
-                RechargeStatus == "success"
-                  ? Theme.colors.primary
-                  : Theme.colors.danger,
-            },
-          ]}
-        >
+        <View style={[styles.header, { backgroundColor: statusUI.bg }]}>
           <View style={styles.iconCircle}>
-            <Text
-              style={[
-                styles.checkmark,
-                { color: RechargeStatus == "success" ? "green" : "red" },
-              ]}
-            >
-              {RechargeStatus == "success" ? "✓" : "✗"}
+            <Text style={[styles.checkmark, { color: statusUI.glyphColor }]}>
+              {statusUI.glyph}
             </Text>
           </View>
           <Text style={styles.headerTitle}>{transactionDetails.status}</Text>
           <Text style={styles.timestamp}>{transactionDetails.timestamp}</Text>
+          {isPending && (
+            <Text style={styles.pendingNote}>
+              Your wallet was debited and the recharge is being processed.
+              We'll notify you once it's done.
+            </Text>
+          )}
         </View>
 
         {/* Mobile Recharge Details */}
@@ -177,9 +182,11 @@ Date: ${moment(responseData.transaction_date).format("DD MMM YYYY hh:mm a")}`,
             <View style={styles.debitedSection}>
               <Text style={styles.debitedLabel}>
                 {" "}
-                {RechargeStatus == "success"
+                {isSuccess
                   ? "Debited from"
-                  : "Amount Will Be refund In case of Debit"}
+                  : isPending
+                  ? "Debited from (recharge in process)"
+                  : "Amount will be refunded if debited"}
               </Text>
               <View style={styles.debitedInfo}>
                 <Image
@@ -213,15 +220,7 @@ Date: ${moment(responseData.transaction_date).format("DD MMM YYYY hh:mm a")}`,
 
       {/* Share Button */}
       <TouchableOpacity
-        style={[
-          styles.shareButton,
-          {
-            backgroundColor:
-              RechargeStatus == "success"
-                ? Theme.colors.primary
-                : Theme.colors.danger,
-          },
-        ]}
+        style={[styles.shareButton, { backgroundColor: statusUI.bg }]}
         onPress={handleShare}
       >
         <Text style={styles.shareButtonText}>Share receipt</Text>
@@ -265,6 +264,15 @@ const styles = StyleSheet.create({
   timestamp: {
     fontSize: 16,
     color: "rgba(255, 255, 255, 0.8)",
+  },
+  pendingNote: {
+    color: "#FFF",
+    fontSize: 13,
+    fontWeight: "500",
+    textAlign: "center",
+    marginTop: 12,
+    paddingHorizontal: 16,
+    lineHeight: 18,
   },
   section: {
     backgroundColor: "white",
