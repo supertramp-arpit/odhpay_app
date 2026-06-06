@@ -130,38 +130,110 @@ const RechargeTrxPin = () => {
   }
 
 
-  // Poll /wallet/service-status until the background recharge resolves.
-  // First 5 polls happen every 500ms (catches the common ~2s BillAvenue
-  // round-trip), then we slow down to 1s for another 20 polls. Total budget
-  // ~22.5s — plenty for a normal recharge, and the success screen handles
-  // "pending" gracefully if BillAvenue is unusually slow (FCM will correct
-  // it once the dispatch finally lands).
-  const pollRechargeStatus = async (referenceId, headers) => {
+  // Listen on the realtime websocket for a terminal event matching our
+  // reference_id. Returns a {promise, cancel} pair so the caller can race it
+  // against the polling fallback. Resolves with a poll-shaped object
+  // ({service_status, error_message}) so downstream code stays uniform.
+  const subscribeRealtimeStatus = (referenceId, token) => {
+    let ws = null;
+    let settled = false;
+    let resolve;
+    const promise = new Promise((r) => { resolve = r; });
+
+    if (!referenceId || !token) {
+      resolve(null);
+      return { promise, cancel: () => {} };
+    }
+
+    try {
+      ws = new WebSocket(
+        `wss://newapi.odhpay.com/realtime/notifications?token=${encodeURIComponent(token)}`
+      );
+      ws.onmessage = (evt) => {
+        if (settled) return;
+        let msg;
+        try { msg = JSON.parse(evt.data); } catch { return; }
+        // Server sends RECHARGE_COMPLETE / DTH_RECHARGE_COMPLETE /
+        // BBPS_PAYMENT_COMPLETE — process_bbps_task fires BBPS_PAYMENT_COMPLETE
+        // for mobile recharge too. Match on reference_id either way.
+        const data = msg?.data || {};
+        const ref = data.reference_id || data.referenceId;
+        if (!ref || ref !== referenceId) return;
+        const status = (msg?.status || "").toUpperCase();
+        if (status !== "SUCCESS" && status !== "FAILED") return;
+
+        settled = true;
+        try { ws.close(); } catch {}
+        resolve({
+          service_status: status === "SUCCESS" ? "completed" : "failed",
+          error_message: data.message,
+          reference_id: referenceId,
+          source: "ws",
+        });
+      };
+      ws.onerror = () => { /* harmless — poll loop will cover */ };
+      ws.onclose = () => { if (!settled) resolve(null); };
+    } catch (e) {
+      console.log("ws subscribe failed", e?.message);
+      resolve(null);
+    }
+
+    return {
+      promise,
+      cancel: () => {
+        settled = true;
+        try { ws && ws.close(); } catch {}
+      },
+    };
+  };
+
+  // Poll /wallet/service-status until the background recharge resolves. Used
+  // as a backstop next to the websocket subscription — whichever signals
+  // terminal first wins. Cancellable so the WS path can short-circuit it.
+  const pollRechargeStatus = async (referenceId, headers, isCancelled = () => false) => {
     if (!referenceId) return { service_status: "pending" };
     const STATUS_URL = `https://newapi.odhpay.com/api/v1/wallet/service-status/${referenceId}`;
     const TERMINAL = new Set(["completed", "failed"]);
 
-    // [intervalMs, count]
-    const phases = [
-      [500, 6],   // first 3s, tight polling
-      [1000, 20], // next 20s, gentler
-    ];
+    // [intervalMs, count] — fast first, then slow. Total ~22s budget.
+    const phases = [[500, 6], [1000, 20]];
 
     let last = { service_status: "pending" };
     for (const [delay, count] of phases) {
       for (let i = 0; i < count; i++) {
+        if (isCancelled()) return last;
         try {
           const { data } = await axios.get(STATUS_URL, { headers });
           last = data || last;
           if (TERMINAL.has((data?.service_status || "").toLowerCase())) return data;
         } catch (e) {
-          // Transient errors are fine — keep polling until budget runs out.
           console.log("status poll attempt failed", e?.message);
         }
         await new Promise((r) => setTimeout(r, delay));
       }
     }
     return last;
+  };
+
+  // Race websocket push against the polling fallback. The first source to
+  // produce a terminal status wins; the other is cancelled.
+  const awaitRechargeOutcome = async (referenceId, headers, token) => {
+    const ws = subscribeRealtimeStatus(referenceId, token);
+    let wsResolved = false;
+
+    const wsRace = ws.promise.then((data) => {
+      if (!data) return null; // ws disconnected / never matched
+      wsResolved = true;
+      return data;
+    });
+
+    const pollRace = pollRechargeStatus(referenceId, headers, () => wsResolved);
+
+    const winner = await Promise.race([wsRace, pollRace]);
+    // Cancel whichever source didn't win so it doesn't keep running.
+    ws.cancel();
+
+    return winner || (await pollRace) || { service_status: "pending" };
   };
 
   const handlePaymentGateway = async () => {
@@ -211,7 +283,10 @@ const RechargeTrxPin = () => {
       // status endpoint until it resolves so the success screen reflects the
       // real recharge outcome, not just "money moved".
       const referenceId = data?.reference_id;
-      const finalStatus = await pollRechargeStatus(referenceId, headers);
+      // Race the websocket push against the polling fallback. The WS notifies
+      // within ~100ms of process_bbps_task completing; polling kicks in if
+      // the socket dropped or the auth check rejected the upgrade.
+      const finalStatus = await awaitRechargeOutcome(referenceId, headers, token);
       setLoading(false);
 
       const isSuccess = finalStatus.service_status === "completed";
