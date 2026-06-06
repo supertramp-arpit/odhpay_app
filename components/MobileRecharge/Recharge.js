@@ -297,7 +297,15 @@ const RechargeScreen = () => {
     const categoryToPlanIds = {};
     const order = [];
 
-    plansList.forEach((p, idx) => {
+    // The upstream returns "discontinued" / "invalid" plans with a ⚠️-prefixed
+    // description and no real validity/data — they're not rechargeable, so
+    // hide them entirely. (We used to render them with an amber warning pill;
+    // turns out users just want a clean list of working plans.)
+    const isInvalid = (p) =>
+      typeof p?.description === "string" && /^\s*⚠/.test(p.description);
+    const cleanList = plansList.filter((p) => !isInvalid(p));
+
+    cleanList.forEach((p) => {
       const pack = planToPack(p);
       planById[pack.planId] = p;
       const cat = (p.category || "All").toString();
@@ -308,7 +316,7 @@ const RechargeScreen = () => {
       categoryToPlanIds[cat].push(pack.planId);
     });
 
-    GlobalPlans.raw = plansList;
+    GlobalPlans.raw = cleanList;
     GlobalPlans.planById = planById;
     GlobalPlans.categoryToPlanIds = categoryToPlanIds;
     GlobalPlans.categoryList = order;
@@ -411,13 +419,6 @@ const RechargeScreen = () => {
     );
   };
 
-  // The upstream stuffs "⚠️ Plan unavailable! Recharge with Rs. X instead"
-  // into the description. We pull that out so the user sees a tidy warning
-  // pill instead of a wall of grey text.
-  const isUnavailableDesc = (s) => !!s && /^\s*⚠/.test(s);
-  const stripWarn = (s) =>
-    (s || "").replace(/^\s*⚠️?\s*/, "").trim();
-
   const InfoChip = ({ icon, label, value, tone = "neutral" }) => (
     <View
       style={[
@@ -439,13 +440,12 @@ const RechargeScreen = () => {
   );
 
   const PlanCard = ({ pack }) => {
-    const unavailable = isUnavailableDesc(pack.description);
     const hasValidity = pack.validity && pack.validity !== "NA";
     const hasData = pack.data && pack.data !== "-";
     return (
       <TouchableOpacity
         activeOpacity={0.92}
-        style={[styles.planCard, unavailable && styles.planCardMuted]}
+        style={styles.planCard}
         onPress={() =>
           navigation.navigate("RechargeScreenPay", {
             contactName,
@@ -483,14 +483,8 @@ const RechargeScreen = () => {
                 )}
               </View>
             )}
-            {!!pack.description && !unavailable && (
+            {!!pack.description && (
               <Text style={styles.desc} numberOfLines={2}>{pack.description}</Text>
-            )}
-            {unavailable && (
-              <View style={styles.warnBox}>
-                <Ionicons name="alert-circle" size={14} color="#B45309" style={{ marginRight: 6 }} />
-                <Text style={styles.warnText} numberOfLines={2}>{stripWarn(pack.description)}</Text>
-              </View>
             )}
             {!!query.trim() && !!pack._cat && (
               <View style={styles.catTag}>
