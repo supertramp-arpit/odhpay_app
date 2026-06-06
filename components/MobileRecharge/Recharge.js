@@ -324,7 +324,12 @@ const RechargeScreen = () => {
     // list by default instead of whichever upstream category happens to be
     // first. selectedCatPacks below specially handles ALL_PLANS_TAB to
     // return every plan across categories.
-    const tabsWithAll = order.length ? [ALL_PLANS_TAB, ...order] : order;
+    // Filter any upstream category that is *also* literally "All Plans" — the
+    // aggregator sometimes labels plans that way, which would collide with our
+    // synthetic tab and produce duplicate React keys. Those plans still live in
+    // categoryToPlanIds and surface via the synthetic tab (allPacks).
+    const realCats = order.filter((c) => c !== ALL_PLANS_TAB);
+    const tabsWithAll = order.length ? [ALL_PLANS_TAB, ...realCats] : order;
 
     GlobalPlans.raw = cleanList;
     GlobalPlans.planById = planById;
@@ -352,8 +357,10 @@ const RechargeScreen = () => {
   // Flatten ALL packs once (memoized) for the All-Plans tab and global search.
   const allPacks = useMemo(() => {
     const packs = [];
-    categories.forEach((cat) => {
-      if (cat === ALL_PLANS_TAB) return; // synthetic tab — skip
+    // Walk the real category→ids buckets (never contains the synthetic
+    // ALL_PLANS_TAB, which only lives in the tab list) so every plan is
+    // included — including any the aggregator labelled "All Plans".
+    Object.keys(GlobalPlans.categoryToPlanIds).forEach((cat) => {
       const ids = GlobalPlans.categoryToPlanIds[cat] || [];
       ids.forEach((id) => {
         const p = GlobalPlans.planById[id];
