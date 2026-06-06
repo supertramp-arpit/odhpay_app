@@ -16,6 +16,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import * as Contacts from "expo-contacts";
+import { Linking } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Theme from "../Theme";
 
@@ -83,18 +84,53 @@ const MobilePrepaid = () => {
 
   useEffect(() => () => { mountedRef.current = false; }, []);
 
-  // Permission request
-  useEffect(() => {
-    (async () => {
-      try {
-        const { status } = await Contacts.requestPermissionsAsync();
-        setHasPermission(status === 'granted');
-        setPermissionDenied(status !== 'granted');
-      } catch {
-        setPermissionDenied(true);
+  // Track whether the permission probe has finished so the UI can stop
+  // showing the indefinite "Checking permission…" hourglass.
+  const [permissionChecked, setPermissionChecked] = useState(false);
+
+  const ensureContactsPermission = useCallback(async () => {
+    // Always reflect terminal state to the UI even when the request hangs
+    // (some Android skins keep requestPermissionsAsync stuck if the system
+    // dialog was previously dismissed with "Don't ask again"). Check the
+    // current grant first; only prompt if necessary; race the request with
+    // a timeout so the UI never stalls.
+    try {
+      const current = await Contacts.getPermissionsAsync();
+      if (current.status === "granted") {
+        setHasPermission(true);
+        setPermissionDenied(false);
+        setPermissionChecked(true);
+        return "granted";
       }
-    })();
+      if (!current.canAskAgain) {
+        setHasPermission(false);
+        setPermissionDenied(true);
+        setPermissionChecked(true);
+        return current.status;
+      }
+
+      const reqWithTimeout = Promise.race([
+        Contacts.requestPermissionsAsync(),
+        new Promise((resolve) => setTimeout(() => resolve({ status: "undetermined" }), 8000)),
+      ]);
+      const { status } = await reqWithTimeout;
+      const granted = status === "granted";
+      setHasPermission(granted);
+      setPermissionDenied(!granted);
+      setPermissionChecked(true);
+      return status;
+    } catch (e) {
+      console.log("contacts permission error", e?.message);
+      setHasPermission(false);
+      setPermissionDenied(true);
+      setPermissionChecked(true);
+      return "error";
+    }
   }, []);
+
+  useEffect(() => {
+    ensureContactsPermission();
+  }, [ensureContactsPermission]);
 
   const getContactName = (c) =>
     c.name || `${c.firstName || ""} ${c.lastName || ""}`.trim() || "Unknown";
@@ -333,11 +369,41 @@ const MobilePrepaid = () => {
 
   const renderEmpty = () => {
     if (!hasPermission) {
+      const stillChecking = !permissionChecked;
       return (
         <View style={styles.emptyContainer}>
-          <Ionicons name={permissionDenied ? "lock-closed-outline" : "hourglass-outline"} size={48} color="#CCC" />
-          <Text style={styles.emptyTitle}>{permissionDenied ? "Permission Denied" : "Checking permission..."}</Text>
-          {permissionDenied && <Text style={styles.emptyText}>Enable contacts in Settings</Text>}
+          <Ionicons
+            name={stillChecking ? "hourglass-outline" : "lock-closed-outline"}
+            size={48}
+            color="#CCC"
+          />
+          <Text style={styles.emptyTitle}>
+            {stillChecking ? "Checking permission..." : "Contacts access needed"}
+          </Text>
+          {!stillChecking && (
+            <>
+              <Text style={styles.emptyText}>
+                Grant contacts access to pick a number from your phonebook, or just
+                type a number above to recharge.
+              </Text>
+              <TouchableOpacity
+                style={styles.grantBtn}
+                onPress={async () => {
+                  const status = await ensureContactsPermission();
+                  // If the system silently denied without a dialog, jump the
+                  // user to the app settings so they can flip it manually.
+                  if (status !== "granted") {
+                    try {
+                      await Linking.openSettings();
+                    } catch {}
+                  }
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.grantBtnText}>Grant access</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       );
     }
@@ -579,6 +645,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     marginTop: 4,
+    textAlign: 'center',
+    paddingHorizontal: 24,
+  },
+  grantBtn: {
+    marginTop: 18,
+    backgroundColor: '#000',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 24,
+  },
+  grantBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
 
