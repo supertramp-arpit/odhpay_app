@@ -30,6 +30,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const isSmallDevice = SCREEN_WIDTH < 375;
 
+// Synthetic "show everything" tab label. Always rendered first so the user
+// lands on a complete list, regardless of which upstream categories exist.
+const ALL_PLANS_TAB = "All Plans";
+
 /* ---------------- Session cache ---------------- */
 export const GlobalPlans = {
   raw: null,
@@ -316,19 +320,20 @@ const RechargeScreen = () => {
       categoryToPlanIds[cat].push(pack.planId);
     });
 
+    // Prepend a synthetic "All Plans" tab so the user lands on a complete
+    // list by default instead of whichever upstream category happens to be
+    // first. selectedCatPacks below specially handles ALL_PLANS_TAB to
+    // return every plan across categories.
+    const tabsWithAll = order.length ? [ALL_PLANS_TAB, ...order] : order;
+
     GlobalPlans.raw = cleanList;
     GlobalPlans.planById = planById;
     GlobalPlans.categoryToPlanIds = categoryToPlanIds;
-    GlobalPlans.categoryList = order;
+    GlobalPlans.categoryList = tabsWithAll;
     GlobalPlans.lastUpdated = Date.now();
-    setCategories(order);
+    setCategories(tabsWithAll);
 
-    const preferred = ["Recommended", "Popular", "Unlimited", "Truly unlimited", "DATA", "All"];
-    const pick =
-      preferred.find((p) => order.find((c) => c.toLowerCase() === p.toLowerCase())) ||
-      order[0] ||
-      null;
-    setSelectedCat(pick);
+    setSelectedCat(tabsWithAll[0] || null);
     setPlansVersion((v) => v + 1);
   };
 
@@ -344,10 +349,11 @@ const RechargeScreen = () => {
   };
 
   /* ---- Build data views ---- */
-  // Flatten ALL packs once (memoized) for fast global search
+  // Flatten ALL packs once (memoized) for the All-Plans tab and global search.
   const allPacks = useMemo(() => {
     const packs = [];
     categories.forEach((cat) => {
+      if (cat === ALL_PLANS_TAB) return; // synthetic tab — skip
       const ids = GlobalPlans.categoryToPlanIds[cat] || [];
       ids.forEach((id) => {
         const p = GlobalPlans.planById[id];
@@ -359,9 +365,12 @@ const RechargeScreen = () => {
     return packs.filter((pk) => (seen.has(pk.planId) ? false : (seen.add(pk.planId), true)));
   }, [plansVersion, categories]);
 
-  // Packs in selected category (for normal browsing when search empty)
+  // Packs in selected category (for normal browsing when search empty).
+  // The synthetic "All Plans" tab returns every plan across every category,
+  // de-duplicated, so the user sees one continuous list.
   const selectedCatPacks = useMemo(() => {
     if (!selectedCat) return [];
+    if (selectedCat === ALL_PLANS_TAB) return allPacks;
     const ids = GlobalPlans.categoryToPlanIds[selectedCat] || [];
     return ids
       .map((id) => {
@@ -369,7 +378,7 @@ const RechargeScreen = () => {
         return p ? { ...planToPack(p, id), _cat: selectedCat } : null;
       })
       .filter(Boolean);
-  }, [selectedCat, plansVersion]);
+  }, [selectedCat, plansVersion, allPacks]);
 
   // ✅ GLOBAL SEARCH: when query is present, search across ALL categories.
   const filteredPack = useMemo(() => {
