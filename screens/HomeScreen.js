@@ -659,28 +659,31 @@ const HomeScreen = () => {
       {/* White sheet that slides up over the pinned hero */}
       <View style={styles.sheet}>
 
-        <View style={styles.bannerScrollContainer}>
-          <Animated.ScrollView
-            ref={scrollViewRef}
-            horizontal
-            pagingEnabled
-            scrollEventThrottle={16}
-            showsHorizontalScrollIndicator={false}
-            nestedScrollEnabled={true}
-            onScroll={Animated.event(
-              [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-              { useNativeDriver: false }
-            )}
-          >
-            {(bannerImages.length ? bannerImages : images).map((image, index) => (
-              <View key={index} style={styles.imageContainer}>
-                <Image source={typeof image === "number" ? image : { uri: image }} style={styles.image} />
+        {/* Quick Pay / Favorites Section */}
+        {quickPayContacts.length > 0 && (
+          <View style={[styles.card, styles.quickPayContainer]}>
+            <View style={styles.quickPayHeader}>
+              <View style={styles.sectionTitleRow}>
+                <View style={styles.sectionTitleAccent}>
+                  <MaterialIcons name="flash-on" size={15} color="#7C3AED" />
+                </View>
+                <Text style={styles.quickPayTitle}>Quick Pay</Text>
               </View>
-            ))}
-          </Animated.ScrollView>
-        </View>
+              <TouchableOpacity onPress={() => navigation.navigate("AllServices")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.quickPayViewAll}>View All</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickPayScroll}
+            >
+              {quickPayContacts.map((contact, index) => renderQuickPayItem(contact, index))}
+            </ScrollView>
+          </View>
+        )}
 
-        <View style={styles.features}>
+        <View style={[styles.card, styles.features]}>
           <TouchableOpacity onPress={() => navigation.navigate("Wallet")}>
             <View style={styles.feature}>
               <LinearGradient
@@ -724,11 +727,13 @@ const HomeScreen = () => {
         {/* ----- Hot Offers strip — attention-grabbing horizontal carousel ----- */}
         <View style={styles.offersSection}>
           <View style={styles.sectionHeaderRow}>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <MaterialIcons name="local-fire-department" size={18} color="#EF4444" />
-              <Text style={styles.offersTitle}>  Hot Offers</Text>
+            <View style={styles.sectionTitleRow}>
+              <View style={[styles.sectionTitleAccent, { backgroundColor: "#FEE2E2" }]}>
+                <MaterialIcons name="local-fire-department" size={15} color="#EF4444" />
+              </View>
+              <Text style={styles.offersTitle}>Hot Offers</Text>
             </View>
-            <TouchableOpacity onPress={() => navigation.navigate("ScratchCardScreen")}>
+            <TouchableOpacity onPress={() => navigation.navigate("ScratchCardScreen")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Text style={styles.quickPayViewAll}>View All</Text>
             </TouchableOpacity>
           </View>
@@ -768,25 +773,6 @@ const HomeScreen = () => {
             ))}
           </ScrollView>
         </View>
-
-        {/* Quick Pay / Favorites Section */}
-        {quickPayContacts.length > 0 && (
-          <View style={styles.quickPayContainer}>
-            <View style={styles.quickPayHeader}>
-              <Text style={styles.quickPayTitle}>Quick Pay</Text>
-              <TouchableOpacity onPress={() => navigation.navigate("AllServices")}>
-                <Text style={styles.quickPayViewAll}>View All</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.quickPayScroll}
-            >
-              {quickPayContacts.map((contact, index) => renderQuickPayItem(contact, index))}
-            </ScrollView>
-          </View>
-        )}
 
         <View style={styles.rechargeAndPayBillsContainer}>
           <View style={styles.rechargeAndPayBills}>
@@ -1049,16 +1035,32 @@ const styles = StyleSheet.create({
     backgroundColor: "#000000",
   },
 
-  // White sheet that slides up over the pinned hero
+  // Light-grey canvas that slides up over the pinned hero. White section
+  // cards float on top of it so each block reads as its own surface.
   sheet: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F2F4F7",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     marginTop: -26,
-    paddingTop: 10,
+    paddingTop: 18,
     zIndex: 2,
     elevation: 12,
     minHeight: screenHeight,
+  },
+
+  // Shared "floating card" surface for every home section.
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    marginHorizontal: 14,
+    marginBottom: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 3,
   },
 
   // ===== Sticky white panel (overlaps the hero, sticks on scroll) =====
@@ -1481,19 +1483,17 @@ const styles = StyleSheet.create({
   },
   features: {
     flexDirection: "row",
-    justifyContent: "space-evenly",
-    padding: 5,
-    flexWrap: "wrap",
+    justifyContent: "space-around",
+    alignItems: "center",
+    flexWrap: "nowrap",
+    paddingVertical: 6,
   },
   feature: {
     alignItems: "center",
-    backgroundColor: Theme.colors.secondary,
-    minHeight: 64,
-    width: 110,
-    borderRadius: 12,
     justifyContent: "center",
     flexDirection: "row",
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
+    flexShrink: 1,
   },
   iconContainerr: {
     backgroundColor: Theme.colors.secondary,
@@ -1522,15 +1522,15 @@ const styles = StyleSheet.create({
   },
   // ---- Hot Offers strip ----
   offersSection: {
-    marginTop: 18,
-    marginBottom: 8,
+    marginTop: 2,
+    marginBottom: 16,
   },
   sectionHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    marginBottom: 10,
+    paddingHorizontal: 18,
+    marginBottom: 12,
   },
   offersTitle: {
     fontSize: 16,
@@ -1612,12 +1612,15 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   rechargeAndPayBillsContainer: {
-    backgroundColor: Theme.colors.secondary,
-    // paddingVertical: 10,
-    borderRadius: 10,
-    marginVertical: 1,
-    width: "95%",
-    alignSelf: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    marginHorizontal: 14,
+    marginBottom: 14,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 3,
   },
   rechargeAndPayBills: {
     padding: 15,
@@ -1645,12 +1648,15 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   loanSectionContainer: {
-    backgroundColor: Theme.colors.secondary,
-    // paddingVertical: 10,
-    borderRadius: 10,
-    marginVertical: 5,
-    width: "95%",
-    alignSelf: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    marginHorizontal: 14,
+    marginBottom: 14,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 3,
   },
   loanSection: {
     padding: 15,
@@ -1689,13 +1695,17 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
   insuranceSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: Theme.colors.secondary,
-    borderRadius: 10,
-    marginVertical: 1,
-    width: "95%",
-    alignSelf: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    marginHorizontal: 14,
+    marginBottom: 14,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 3,
   },
   insuranceOptions: {
     flexDirection: "row",
@@ -1860,68 +1870,79 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   quickPayContainer: {
-    backgroundColor: Theme.colors.secondary,
-    borderRadius: 10,
-    marginVertical: 8,
-    marginHorizontal: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
+  },
+
+  // Shared section-header pieces (title + small coloured accent chip)
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  sectionTitleAccent: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: "#F3E8FF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
   },
   quickPayHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
-    paddingHorizontal: 4,
+    marginBottom: 14,
   },
   quickPayTitle: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: Theme.colors.primary,
+    fontWeight: "800",
+    color: "#0F172A",
+    letterSpacing: 0.2,
   },
   quickPayViewAll: {
     fontSize: 13,
-    color: Theme.colors.primary,
-    fontWeight: "600",
-    textDecorationLine: "underline",
+    color: "#7C3AED",
+    fontWeight: "700",
   },
   quickPayScroll: {
-    paddingHorizontal: 4,
-    gap: 16,
+    paddingRight: 8,
+    gap: 18,
   },
   quickPayItem: {
     alignItems: "center",
-    width: 70,
+    width: 68,
   },
   quickPayAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 6,
+    marginBottom: 8,
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: "#EEF1F5",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
   quickPayAvatarImage: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 8,
     resizeMode: "contain",
   },
   quickPayName: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: Theme.colors.primary,
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#1E293B",
     textAlign: "center",
   },
   quickPayCategory: {
-    fontSize: 9,
-    color: "#666",
+    fontSize: 9.5,
+    color: "#94A3B8",
     textAlign: "center",
     marginTop: 2,
   },
