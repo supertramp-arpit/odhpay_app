@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -25,26 +25,30 @@ const RechargeSuccess = () => {
   const navigation = useNavigation();
   const { user } = useRegisterStore();
 
-  useEffect(() => {
-    const backAction = () => {
-      if (navigation.canGoBack()) {
-        navigation.pop(2); // Go back two screens
-        return true; // Prevent default back action
-      } else {
-        Alert.alert("Exit App", "Do you want to exit?", [
-          { text: "Cancel", style: "cancel" },
-          { text: "Exit", onPress: () => BackHandler.exitApp() },
-        ]);
-        return true;
-      }
-    };
+  // The recharge flow is done — clear it out so the user cannot navigate
+  // back through RechargeTrxPin → RechargeScreenPay → Recharge plans and
+  // accidentally re-initiate. Reset the stack to MainApp (bottom tabs).
+  const goHome = useCallback(() => {
+    navigation.reset({ index: 0, routes: [{ name: "MainApp" }] });
+  }, [navigation]);
 
+  useEffect(() => {
     const backHandler = BackHandler.addEventListener(
       "hardwareBackPress",
-      backAction
+      () => {
+        goHome();
+        return true;
+      }
     );
-
     return () => backHandler.remove();
+  }, [goHome]);
+
+  // Hide the native header back arrow so swipe-back / arrow can't escape.
+  useEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => null,
+      gestureEnabled: false,
+    });
   }, [navigation]);
 
   const route = useRoute();
@@ -221,6 +225,10 @@ Date: ${moment(responseData.transaction_date).format("DD MMM YYYY hh:mm a")}`,
         onPress={handleShare}
       >
         <Text style={styles.shareButtonText}>Share receipt</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.homeButton} onPress={goHome} activeOpacity={0.85}>
+        <Text style={styles.homeButtonText}>Back to Home</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -403,6 +411,22 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  homeButton: {
+    marginHorizontal: 16,
+    marginTop: -4,
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: Theme.colors.primary,
+    backgroundColor: "#FFF",
+  },
+  homeButtonText: {
+    color: Theme.colors.primary,
+    fontSize: 15,
+    fontWeight: "700",
   },
   footer: {
     flexDirection: "row",
