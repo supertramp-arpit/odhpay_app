@@ -57,13 +57,21 @@ const planToPack = (p) => ({
 // payment screens / commission lookup that key off operator_name still work).
 const OPERATOR_CODE_TO_LOCAL = {
   JIO: { name: "Jio Prepaid", operatorId: 652 },
+  JIOPRE: { name: "Jio Prepaid", operatorId: 652 },
   AIRTEL: { name: "Airtel Prepaid", operatorId: 650 },
   AIRTELPRE: { name: "Airtel Prepaid", operatorId: 650 },
+  // The PhonePe upstream returns "VILPRE" (Vi-limited prepaid) for ported and
+  // native Vi numbers — add every plausible alias so the chip resolves.
   VI: { name: "Vi Prepaid", operatorId: 653 },
   VIPRE: { name: "Vi Prepaid", operatorId: 653 },
+  VILPRE: { name: "Vi Prepaid", operatorId: 653 },
+  VIL: { name: "Vi Prepaid", operatorId: 653 },
   VODAFONE: { name: "Vi Prepaid", operatorId: 653 },
+  VODAPRE: { name: "Vi Prepaid", operatorId: 653 },
   IDEA: { name: "Vi Prepaid", operatorId: 653 },
+  IDEAPRE: { name: "Vi Prepaid", operatorId: 653 },
   BSNL: { name: "BSNL Prepaid", operatorId: 651 },
+  BSNLPRE: { name: "BSNL Prepaid", operatorId: 651 },
 };
 
 // Reverse: the OperatorPopup hands back the local display name (e.g. "Jio Prepaid").
@@ -151,12 +159,15 @@ const RechargeScreen = () => {
     { name: "Jio Prepaid", logo: require("../../assets/jio.png") },
     { name: "Vi Prepaid", logo: require("../../assets/vi.png") },
   ];
+  // Resolve the chip image strictly from the resolved operator; never default
+  // to Jio (that was the source of the "Vi number shows Jio logo" bug). When
+  // we can't resolve an operator yet, fall through to the app's neutral logo.
   const selectedOperatorImage =
     selectedLogo ||
     operatorlistWithImg.find(
       (item) => item.name.toLowerCase() === (operatorCircle?.operator || "").toLowerCase()
     )?.logo ||
-    require("../../assets/jio.png");
+    require("../../assets/LogoN.png");
 
   const resetPlans = () => {
     GlobalPlans.raw = null;
@@ -190,7 +201,12 @@ const RechargeScreen = () => {
   };
 
   const applyLocalOperator = (opCode, circleName) => {
-    const local = OPERATOR_CODE_TO_LOCAL[(opCode || "").toUpperCase()] || null;
+    // Always wipe the previous chip state first, otherwise an unmapped
+    // operator code silently keeps the stale logo/name from the last screen
+    // (e.g. a prior Jio recharge → chip stuck on "Jio Prepaid" for a Vi number).
+    setSelectedLogo(null);
+    const codeUpper = (opCode || "").toUpperCase();
+    const local = OPERATOR_CODE_TO_LOCAL[codeUpper] || null;
     if (local) {
       setSelectedOperator({
         circle: circleName || operatorCircle?.circle,
@@ -202,6 +218,17 @@ const RechargeScreen = () => {
         )?.logo || null
       );
       setOperatorId(local.operatorId);
+    } else if (codeUpper) {
+      // Unknown upstream code — surface the raw code rather than letting the
+      // previous operator linger. No logo (chip falls back to initials/default).
+      console.warn(
+        `Unmapped MNP operator code "${codeUpper}" — add it to OPERATOR_CODE_TO_LOCAL`
+      );
+      setSelectedOperator({
+        circle: circleName || operatorCircle?.circle,
+        operator: codeUpper,
+      });
+      setOperatorId(null);
     }
   };
 
