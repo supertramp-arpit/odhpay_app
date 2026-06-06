@@ -82,6 +82,32 @@ const RechargeTrxPin = () => {
   }
 
 
+  // Poll /wallet/service-status until the background recharge resolves.
+  // Returns the last seen status payload — caller decides what to show.
+  // Bounded so a stuck BillAvenue call doesn't hang the UI forever; the
+  // backend will keep processing and FCM will surface the final outcome.
+  const pollRechargeStatus = async (referenceId, headers) => {
+    if (!referenceId) return { service_status: "pending" };
+    const STATUS_URL = `https://newapi.odhpay.com/api/v1/wallet/service-status/${referenceId}`;
+    const TERMINAL = new Set(["completed", "failed"]);
+    const MAX_ATTEMPTS = 12; // ~12s total at 1s spacing
+    const SLEEP_MS = 1000;
+
+    let last = { service_status: "pending" };
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      try {
+        const { data } = await axios.get(STATUS_URL, { headers });
+        last = data || last;
+        if (TERMINAL.has((data?.service_status || "").toLowerCase())) return data;
+      } catch (e) {
+        // Transient errors are fine — keep polling until budget runs out.
+        console.log("status poll attempt failed", attempt, e?.message);
+      }
+      await new Promise((r) => setTimeout(r, SLEEP_MS));
+    }
+    return last;
+  };
+
   const handlePaymentGateway = async () => {
     // For now we pay every recharge from the wallet — the gateway flow is
     // disabled until we re-enable Razorpay/SabPaisa for this surface. The
@@ -124,26 +150,34 @@ const RechargeTrxPin = () => {
         { headers }
       );
 
+      // /pay-service returns as soon as the wallet is debited; the actual
+      // BillAvenue recharge runs in a background task. Poll the per-request
+      // status endpoint until it resolves so the success screen reflects the
+      // real recharge outcome, not just "money moved".
+      const referenceId = data?.reference_id;
+      const finalStatus = await pollRechargeStatus(referenceId, headers);
       setLoading(false);
 
-      // The /wallet/pay-service call returns synchronously once the wallet is
-      // debited; the actual BillAvenue dispatch happens in a background task.
-      // Anything that isn't an explicit failure should render the success UI —
-      // the user's money already moved successfully.
-      const apiStatus = (data?.status || "").toLowerCase();
-      const isFailure =
-        data?.success === false ||
-        ["failed", "rejected", "error"].includes(apiStatus);
+      const isSuccess = finalStatus.service_status === "completed";
+      const isFailure = finalStatus.service_status === "failed";
+      const rechargeStatus = isSuccess ? "success" : (isFailure ? "failed" : "pending");
 
       navigation.navigate("RechargeSuccess", {
         amount: parseFloat(amount),
         mobile_number: normalizeIndianMobile(mobile_number),
         recipient_name: OperatorMap[recipient_name] || recipient_name,
-        RechargeStatus: isFailure ? (apiStatus || "failed") : "success",
+        RechargeStatus: rechargeStatus,
         responseData: {
-          bbps_reference_no: data?.reference_id,
+          bbps_reference_no: referenceId,
           transaction_date: new Date().toISOString(),
-          message: data?.message,
+          message:
+            finalStatus.error_message ||
+            data?.message ||
+            (isSuccess
+              ? "Recharge successful"
+              : isFailure
+              ? "Recharge failed"
+              : "Recharge in process. We'll notify you once it's done."),
           balance_after: data?.balance_after,
         },
       });
