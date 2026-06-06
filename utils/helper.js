@@ -12,4 +12,12 @@ function correctPath(url) {
     return url.replace(/\\/g, '/');
 }
 
-export { formatDate, correctPath };
+// Strip everything but digits and keep the trailing 10 digits — handles
+// "+91 99360 19580", "919936019580", "9936019580" etc. Returns "" for input
+// shorter than 10 digits so callers can validate.
+function normalizeIndianMobile(value) {
+    const digits = String(value ?? "").replace(/\D/g, "");
+    return digits.length >= 10 ? digits.slice(-10) : "";
+}
+
+export { formatDate, correctPath, normalizeIndianMobile };
