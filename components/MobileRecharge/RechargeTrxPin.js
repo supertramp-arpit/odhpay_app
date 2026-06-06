@@ -27,6 +27,15 @@ const RechargeTrxPin = () => {
 
 
   const getCommission = async () => {
+    // Face-value fallback so a flaky/missing commission lookup never blocks
+    // the proceed-to-pay flow. The user always sees a usable `commission.total`.
+    const faceValue = {
+      status: "fallback",
+      platformFee: 0,
+      discount: 0,
+      lcrMoney: 0,
+      total: parseFloat(amount) || 0,
+    };
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem("access_token");
@@ -41,27 +50,24 @@ const RechargeTrxPin = () => {
         Authorization: `Bearer ${token}`,
       };
 
-      console.log({
-        "amount": amount,
-        "provider": recipient_name
-      })
-
-      const { data } = await axios.post("https://newapi.odhpay.com/recharge/get_commision",
-        {
-          "amount": amount,
-          "provider": recipient_name
-        }
-        ,
-        { headers });
+      const { data } = await axios.post(
+        "https://newapi.odhpay.com/recharge/get_commision",
+        { amount: amount, provider: recipient_name },
+        { headers }
+      );
       setLoading(false);
-      console.log("data", data);
-      setCommission(data)
-
+      setCommission(
+        data && typeof data.total !== "undefined" ? data : faceValue
+      );
     } catch (error) {
-      console.log(error)
+      console.log(
+        "commission lookup failed, using face value",
+        error?.response?.data || error?.message
+      );
       setLoading(false);
+      setCommission(faceValue);
     }
-  }
+  };
 
   useEffect(() => {
     getCommission();
