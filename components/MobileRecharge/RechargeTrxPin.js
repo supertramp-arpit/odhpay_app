@@ -126,11 +126,20 @@ const RechargeTrxPin = () => {
 
       setLoading(false);
 
+      // The /wallet/pay-service call returns synchronously once the wallet is
+      // debited; the actual BillAvenue dispatch happens in a background task.
+      // Anything that isn't an explicit failure should render the success UI —
+      // the user's money already moved successfully.
+      const apiStatus = (data?.status || "").toLowerCase();
+      const isFailure =
+        data?.success === false ||
+        ["failed", "rejected", "error"].includes(apiStatus);
+
       navigation.navigate("RechargeSuccess", {
         amount: parseFloat(amount),
         mobile_number: normalizeIndianMobile(mobile_number),
         recipient_name: OperatorMap[recipient_name] || recipient_name,
-        RechargeStatus: data?.status === "completed" ? "success" : (data?.processing_status || "queued"),
+        RechargeStatus: isFailure ? (apiStatus || "failed") : "success",
         responseData: {
           bbps_reference_no: data?.reference_id,
           transaction_date: new Date().toISOString(),
