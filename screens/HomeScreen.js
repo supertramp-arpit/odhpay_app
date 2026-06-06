@@ -51,6 +51,48 @@ const CATEGORY_ICONS = {
   "default": { icon: "receipt", color: "#607D8B", bg: "#ECEFF1" },
 };
 
+// Curated promo cards for the home "Hot Offers" strip. Pure presentation —
+// no remote dependency yet, so a flaky network never leaves the row empty.
+// Wire each `target` to an existing screen in AppNavigator.
+const OFFER_CARDS = [
+  {
+    tag: "FLAT 5% OFF",
+    title: "Mobile Recharge Cashback",
+    subtitle: "On every Jio, Airtel & Vi prepaid plan",
+    cta: "Recharge Now",
+    gradient: ["#7C3AED", "#4338CA"],
+    icon: "smartphone",
+    target: "MobilePrepaid",
+  },
+  {
+    tag: "₹50 EXTRA",
+    title: "Refer & Earn ₹50",
+    subtitle: "For every friend who joins ODH Pay",
+    cta: "Invite Friends",
+    gradient: ["#F97316", "#DB2777"],
+    icon: "card-giftcard",
+    target: "ReferralScreen",
+  },
+  {
+    tag: "₹100 BACK",
+    title: "Electricity Bill Pay",
+    subtitle: "Pay any discom bill and get ₹100 cashback",
+    cta: "Pay Bill",
+    gradient: ["#0EA5E9", "#1D4ED8"],
+    icon: "bolt",
+    target: "AllServices",
+  },
+  {
+    tag: "ZERO FEE",
+    title: "FASTag Recharge",
+    subtitle: "Top up any FASTag with zero convenience fee",
+    cta: "Recharge",
+    gradient: ["#10B981", "#047857"],
+    icon: "directions-car",
+    target: "AllServices",
+  },
+];
+
 const { width, height: screenHeight } = Dimensions.get("window");
 const isSmallDevice = width < 360;
 const horizontalGutter = Math.max(12, width * 0.04);
@@ -641,34 +683,90 @@ const HomeScreen = () => {
         <View style={styles.features}>
           <TouchableOpacity onPress={() => navigation.navigate("Wallet")}>
             <View style={styles.feature}>
-              <View style={[styles.iconContainerr, { backgroundColor: "#E8F5E9" }]}>
-                <MaterialIcons name="account-balance-wallet" size={15} color="#10B981" />
-              </View>
+              <LinearGradient
+                colors={["#34D399", "#059669"]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={styles.feature3dIcon}
+              >
+                <MaterialIcons name="account-balance-wallet" size={22} color="#FFF" />
+              </LinearGradient>
               <Text style={styles.featureText}>Wallet</Text>
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => navigation.navigate("ScratchCardScreen")}
-          >
+          <TouchableOpacity onPress={() => navigation.navigate("ScratchCardScreen")}>
             <View style={styles.feature}>
-              <View style={[styles.iconContainerr, { backgroundColor: "#FFF3E0" }]}>
-                <MaterialIcons name="card-giftcard" size={15} color="#F59E0B" />
-              </View>
+              <LinearGradient
+                colors={["#FBBF24", "#D97706"]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={styles.feature3dIcon}
+              >
+                <MaterialIcons name="card-giftcard" size={22} color="#FFF" />
+              </LinearGradient>
               <Text style={styles.featureText}>Explore{"\n"}Rewards</Text>
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => navigation.navigate("ReferralScreen")}
-          >
+          <TouchableOpacity onPress={() => navigation.navigate("ReferralScreen")}>
             <View style={styles.feature}>
-              <View style={[styles.iconContainerr, { backgroundColor: "#E3F2FD" }]}>
-                <MaterialIcons name="group-add" size={15} color="#2196F3" />
-              </View>
+              <LinearGradient
+                colors={["#60A5FA", "#2563EB"]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={styles.feature3dIcon}
+              >
+                <MaterialIcons name="group-add" size={22} color="#FFF" />
+              </LinearGradient>
               <Text style={styles.featureText}>Refer &{"\n"}Earn ₹50</Text>
             </View>
           </TouchableOpacity>
+        </View>
+
+        {/* ----- Hot Offers strip — attention-grabbing horizontal carousel ----- */}
+        <View style={styles.offersSection}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <MaterialIcons name="local-fire-department" size={18} color="#EF4444" />
+              <Text style={styles.offersTitle}>  Hot Offers</Text>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate("ScratchCardScreen")}>
+              <Text style={styles.quickPayViewAll}>View All</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.offersScroll}
+            decelerationRate="fast"
+            snapToInterval={width * 0.78 + 12}
+          >
+            {OFFER_CARDS.map((offer, i) => (
+              <TouchableOpacity
+                key={`offer-${i}`}
+                activeOpacity={0.9}
+                onPress={() => offer.target && navigation.navigate(offer.target)}
+                style={styles.offerCardWrap}
+              >
+                <LinearGradient
+                  colors={offer.gradient}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                  style={styles.offerCard}
+                >
+                  <View style={styles.offerCardTextBox}>
+                    <Text style={styles.offerCardTag}>{offer.tag}</Text>
+                    <Text style={styles.offerCardTitle} numberOfLines={2}>{offer.title}</Text>
+                    <Text style={styles.offerCardSub} numberOfLines={2}>{offer.subtitle}</Text>
+                    <View style={styles.offerCta}>
+                      <Text style={styles.offerCtaText}>{offer.cta}</Text>
+                      <MaterialIcons name="arrow-forward" size={14} color="#FFF" />
+                    </View>
+                  </View>
+                  <View style={styles.offerCardIconWrap}>
+                    <MaterialIcons name={offer.icon} size={56} color="rgba(255,255,255,0.35)" />
+                  </View>
+                </LinearGradient>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
 
         {/* Quick Pay / Favorites Section */}
@@ -1390,12 +1488,12 @@ const styles = StyleSheet.create({
   feature: {
     alignItems: "center",
     backgroundColor: Theme.colors.secondary,
-    height: 60,
+    minHeight: 64,
     width: 110,
-    borderRadius: 10,
+    borderRadius: 12,
     justifyContent: "center",
     flexDirection: "row",
-    // padding: 10,
+    paddingHorizontal: 6,
   },
   iconContainerr: {
     backgroundColor: Theme.colors.secondary,
@@ -1406,6 +1504,106 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 5,
     marginRight: 5,
+  },
+  // Gradient-filled circle with layered shadow for a "3D" feel on the
+  // top-of-page feature chips (Wallet / Rewards / Refer).
+  feature3dIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  // ---- Hot Offers strip ----
+  offersSection: {
+    marginTop: 18,
+    marginBottom: 8,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  offersTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  offersScroll: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  offerCardWrap: {
+    marginHorizontal: 4,
+    borderRadius: 18,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  offerCard: {
+    width: width * 0.78,
+    height: 130,
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: "row",
+    overflow: "hidden",
+  },
+  offerCardTextBox: {
+    flex: 1,
+    justifyContent: "space-between",
+  },
+  offerCardTag: {
+    color: "#FFF",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  offerCardTitle: {
+    color: "#FFF",
+    fontSize: 15,
+    fontWeight: "800",
+    marginTop: 6,
+  },
+  offerCardSub: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 11,
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  offerCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
+    marginTop: 8,
+  },
+  offerCtaText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "700",
+    marginRight: 4,
+  },
+  offerCardIconWrap: {
+    width: 70,
+    alignItems: "flex-end",
+    justifyContent: "center",
   },
   featureText: {
     color: Theme.colors.primary,
