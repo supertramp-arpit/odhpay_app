@@ -56,6 +56,28 @@ const isSmallDevice = width < 360;
 const horizontalGutter = Math.max(12, width * 0.04);
 const baseFont = isSmallDevice ? 12 : 14;
 
+// Try the biller-asset CDN first; fall back to the category icon if the logo
+// 404s (only ~1.2k of 22k billers have a logo, so misses are normal).
+const QuickPayAvatar = ({ billerId, iconInfo }) => {
+  const [failed, setFailed] = useState(false);
+  if (billerId && !failed) {
+    return (
+      <View style={[styles.quickPayAvatar, { backgroundColor: "#FFF" }]}>
+        <Image
+          source={{ uri: `https://assetcdn.odhpay.com/biller-assets/${billerId}.png?v=2` }}
+          style={styles.quickPayAvatarImage}
+          onError={() => setFailed(true)}
+        />
+      </View>
+    );
+  }
+  return (
+    <View style={[styles.quickPayAvatar, { backgroundColor: iconInfo.bg }]}>
+      <MaterialIcons name={iconInfo.icon} size={22} color={iconInfo.color} />
+    </View>
+  );
+};
+
 const HomeScreen = () => {
   const [quickPayContacts, setQuickPayContacts] = useState([]);
   const [quickPayLoading, setQuickPayLoading] = useState(false);
@@ -419,9 +441,7 @@ const HomeScreen = () => {
         onPress={() => handleQuickPayPress(contact)}
         activeOpacity={0.7}
       >
-        <View style={[styles.quickPayAvatar, { backgroundColor: iconInfo.bg }]}>
-          <MaterialIcons name={iconInfo.icon} size={22} color={iconInfo.color} />
-        </View>
+        <QuickPayAvatar billerId={contact.biller_id} iconInfo={iconInfo} />
         <Text style={styles.quickPayName} numberOfLines={1}>
           {getContactDisplayName(contact)}
         </Text>
@@ -1654,11 +1674,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 6,
+    overflow: "hidden",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  quickPayAvatarImage: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    resizeMode: "contain",
   },
   quickPayName: {
     fontSize: 11,
