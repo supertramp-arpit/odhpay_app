@@ -51,7 +51,7 @@ const CATEGORY_ICONS = {
   "default": { icon: "receipt", color: "#607D8B", bg: "#ECEFF1" },
 };
 
-const { width } = Dimensions.get("window");
+const { width, height: screenHeight } = Dimensions.get("window");
 const isSmallDevice = width < 360;
 const horizontalGutter = Math.max(12, width * 0.04);
 const baseFont = isSmallDevice ? 12 : 14;
@@ -147,10 +147,19 @@ const HomeScreen = () => {
 
 
   const scrollX = useRef(new Animated.Value(0)).current;
+  const heroScrollY = useRef(new Animated.Value(0)).current;
+  const [heroHeight, setHeroHeight] = useState(0);
   const scrollViewRef = useRef(null);
   const [modalVisible, setModalVisible] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [bannerImages, setBannerImages] = useState(images);
+
+  // Pin the hero in place while the white sheet scrolls up over it
+  const heroTranslate = heroScrollY.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+    extrapolateLeft: "clamp",
+  });
 
   useEffect(() => {
     const listener = scrollX.addListener(({ value }) => {
@@ -509,16 +518,22 @@ const HomeScreen = () => {
 
 
 
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: 90, backgroundColor: "#FFFFFF" }}
+      <Animated.ScrollView
+        contentContainerStyle={{ paddingBottom: 90 }}
         showsVerticalScrollIndicator={false}
         bounces={true}
-        stickyHeaderIndices={[1]}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: heroScrollY } } }],
+          { useNativeDriver: true }
+        )}
       >
+      <Animated.View style={{ transform: [{ translateY: heroTranslate }], zIndex: 0 }}>
       <LinearGradient
         colors={["#000000", "#000000"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
+        onLayout={(e) => setHeroHeight(e.nativeEvent.layout.height)}
         style={[
           styles.heroWrap,
           { paddingTop: Math.max(safeTop - 20, 8) },
@@ -586,19 +601,21 @@ const HomeScreen = () => {
 
 
         {/* Hero illustration */}
-        <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 0, paddingBottom: 22 }}>
+        <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 0, paddingBottom: 8 }}>
           <Image
             source={require("../assets/heroodhpay_trim.png")}
             style={{
-              width: width * 0.58,
-              height: width * 0.58 * (1176 / 925),
+              width: width * 0.42,
+              height: width * 0.42 * (1176 / 925),
             }}
             resizeMode="contain"
           />
         </View>
       </LinearGradient>
+      </Animated.View>
 
-      {/* Quick Actions moved to Wallet screen */}
+      {/* White sheet that slides up over the pinned hero */}
+      <View style={styles.sheet}>
 
         <View style={styles.bannerScrollContainer}>
           <Animated.ScrollView
@@ -922,7 +939,8 @@ const HomeScreen = () => {
           </TouchableOpacity>
         </View>
 
-      </ScrollView>
+      </View>
+      </Animated.ScrollView>
     </View>
   );
 };
@@ -930,7 +948,19 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#000000",
+  },
+
+  // White sheet that slides up over the pinned hero
+  sheet: {
     backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    marginTop: -26,
+    paddingTop: 10,
+    zIndex: 2,
+    elevation: 12,
+    minHeight: screenHeight,
   },
 
   // ===== Sticky white panel (overlaps the hero, sticks on scroll) =====
@@ -971,9 +1001,7 @@ const styles = StyleSheet.create({
   // ===== Blue hero =====
   heroWrap: {
     paddingHorizontal: horizontalGutter,
-    paddingBottom: 14,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
+    paddingBottom: 30,
     overflow: "hidden",
     position: "relative",
   },
