@@ -83,17 +83,14 @@ const RechargeTrxPin = () => {
 
 
   const handlePaymentGateway = async () => {
+    // For now we pay every recharge from the wallet — the gateway flow is
+    // disabled until we re-enable Razorpay/SabPaisa for this surface. The
+    // backend's /wallet/pay-service endpoint debits the wallet AND triggers
+    // the BBPS recharge dispatch (via the new /recharge/initiate path) in
+    // one call, so we can navigate straight to the success screen on 200.
     try {
       setLoading(true);
 
-      // Validate commission data exists
-      if (!commission || !commission.total) {
-        Alert.alert("Error", "Commission details not available. Please try again.");
-        setLoading(false);
-        return;
-      }
-
-      // Get access token
       const token = await AsyncStorage.getItem("access_token");
       if (!token) {
         Alert.alert("Error", "Authentication token not found");
@@ -101,63 +98,57 @@ const RechargeTrxPin = () => {
         return;
       }
 
-      // Get active payment gateway
       const headers = {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
+        Accept: "application/json",
+        "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       };
 
-      const gatewayRes = await axios.get('https://newapi.odhpay.com/gateways/active', { headers });
-      const selectedMethod = gatewayRes?.data?.gateway_name?.toLowerCase();
-      const PaymentMethods = ['razorpay', 'sabpaisa'];
-
-      if (!selectedMethod || !PaymentMethods.includes(selectedMethod)) {
-        Alert.alert('Error', 'No active payment gateway available');
-        setLoading(false);
-        return;
-      }
-
-      console.log('Active Payment Gateway:', selectedMethod);
-
-      // Route to appropriate payment gateway
-      const paymentRoute = selectedMethod === 'razorpay' ? 'RazorpayPayScreen' : 'payWithSabpaise';
-
-      const finalAmount = parseFloat(parseFloat(commission.total).toFixed(2));
-
-      const navigationParams = {
-        autoStart: false,
-        origin: "RechargeTrxPin",
-        returnTo: "HomeScreen",
-        amount: finalAmount,
-        InitialAMount: parseFloat(amount),
-        payload: {
-          "amount": parseFloat(amount),
-          "service_type": "MobileRecharge",
-          "purpose": "Payment",
-          "mobile_number": normalizeIndianMobile(mobile_number),
-          "recharge_data": {
-            "operator_code": operator_code ? String(operator_code) : "",
-            "mobile_number": normalizeIndianMobile(mobile_number),
-            "operator_name": OperatorMap[recipient_name] || recipient_name,
-            "recharge_type": "prepaid",
-            "circle": circle,
-            "circle_code": circle_code || undefined,
-          }
+      const payload = {
+        amount: parseFloat(amount),
+        service_type: "MobileRecharge",
+        purpose: "Payment",
+        recharge_data: {
+          mobile_number: normalizeIndianMobile(mobile_number),
+          operator_name: OperatorMap[recipient_name] || recipient_name,
+          operator_code: operator_code ? String(operator_code) : undefined,
+          circle: circle || undefined,
+          circle_code: circle_code || undefined,
+          recharge_type: "prepaid",
         },
       };
 
-      navigation.navigate(paymentRoute, navigationParams);
+      const { data } = await axios.post(
+        "https://newapi.odhpay.com/wallet/pay-service",
+        payload,
+        { headers }
+      );
+
       setLoading(false);
 
+      navigation.navigate("RechargeSuccess", {
+        amount: parseFloat(amount),
+        mobile_number: normalizeIndianMobile(mobile_number),
+        recipient_name: OperatorMap[recipient_name] || recipient_name,
+        RechargeStatus: data?.status === "completed" ? "success" : (data?.processing_status || "queued"),
+        responseData: {
+          bbps_reference_no: data?.reference_id,
+          transaction_date: new Date().toISOString(),
+          message: data?.message,
+          balance_after: data?.balance_after,
+        },
+      });
     } catch (error) {
-      console.error("Payment Gateway Error:", error);
+      console.error("Wallet pay error:", error?.response?.data || error?.message);
       setLoading(false);
-      if (axios.isAxiosError(error)) {
-        Alert.alert("Error", error.response?.data?.message || "Failed to get payment gateway");
-      } else {
-        Alert.alert("Error", "Something went wrong. Please try again.");
-      }
+      const detail = error?.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : detail?.message ||
+            error?.response?.data?.message ||
+            "Recharge failed. Please try again.";
+      Alert.alert("Recharge failed", msg);
     }
   };
 
