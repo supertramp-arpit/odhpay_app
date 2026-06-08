@@ -57,10 +57,10 @@ const CATEGORY_ICONS = {
 const OFFER_CARDS = [
   {
     tag: "FLAT 5% OFF",
-    title: "Mobile Recharge Cashback",
+    title: "Recharge Cashback",
     subtitle: "On every Jio, Airtel & Vi prepaid plan",
     cta: "Recharge Now",
-    gradient: ["#7C3AED", "#4338CA"],
+    accent: "#A78BFA",
     icon: "smartphone",
     target: "MobilePrepaid",
   },
@@ -69,25 +69,25 @@ const OFFER_CARDS = [
     title: "Refer & Earn ₹50",
     subtitle: "For every friend who joins ODH Pay",
     cta: "Invite Friends",
-    gradient: ["#F97316", "#DB2777"],
+    accent: "#FB923C",
     icon: "card-giftcard",
     target: "ReferralScreen",
   },
   {
     tag: "₹100 BACK",
     title: "Electricity Bill Pay",
-    subtitle: "Pay any discom bill and get ₹100 cashback",
+    subtitle: "Pay any discom bill, get ₹100 cashback",
     cta: "Pay Bill",
-    gradient: ["#0EA5E9", "#1D4ED8"],
+    accent: "#38BDF8",
     icon: "bolt",
     target: "AllServices",
   },
   {
     tag: "ZERO FEE",
     title: "FASTag Recharge",
-    subtitle: "Top up any FASTag with zero convenience fee",
+    subtitle: "Top up any FASTag with zero fee",
     cta: "Recharge",
-    gradient: ["#10B981", "#047857"],
+    accent: "#34D399",
     icon: "directions-car",
     target: "AllServices",
   },
@@ -849,31 +849,46 @@ const HomeScreen = () => {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.offersScroll}
             decelerationRate="fast"
-            snapToInterval={width * 0.78 + 12}
+            snapToInterval={width * 0.82 + 10}
           >
             {OFFER_CARDS.map((offer, i) => (
               <TouchableOpacity
                 key={`offer-${i}`}
-                activeOpacity={0.9}
+                activeOpacity={0.92}
                 onPress={() => offer.target && navigation.navigate(offer.target)}
                 style={styles.offerCardWrap}
               >
                 <LinearGradient
-                  colors={offer.gradient}
+                  colors={["#2A2A2E", "#050505"]}
                   start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                   style={styles.offerCard}
                 >
+                  {/* accent glows + top edge for a premium, lit-from-within look */}
+                  <View style={[styles.offerGlow, { backgroundColor: offer.accent }]} />
+                  <View style={[styles.offerGlowSm, { backgroundColor: offer.accent }]} />
+                  <View style={[styles.offerAccentBar, { backgroundColor: offer.accent }]} />
+
                   <View style={styles.offerCardTextBox}>
-                    <Text style={styles.offerCardTag}>{offer.tag}</Text>
-                    <Text style={styles.offerCardTitle} numberOfLines={2}>{offer.title}</Text>
-                    <Text style={styles.offerCardSub} numberOfLines={2}>{offer.subtitle}</Text>
+                    <View style={[styles.offerCardTag, { backgroundColor: offer.accent }]}>
+                      <Text style={styles.offerCardTagText}>{offer.tag}</Text>
+                    </View>
+                    <View>
+                      <Text style={styles.offerCardTitle} numberOfLines={1}>{offer.title}</Text>
+                      <Text style={styles.offerCardSub} numberOfLines={2}>{offer.subtitle}</Text>
+                    </View>
                     <View style={styles.offerCta}>
                       <Text style={styles.offerCtaText}>{offer.cta}</Text>
-                      <MaterialIcons name="arrow-forward" size={14} color="#FFF" />
+                      <MaterialIcons name="arrow-forward" size={14} color="#000" />
                     </View>
                   </View>
-                  <View style={styles.offerCardIconWrap}>
-                    <MaterialIcons name={offer.icon} size={56} color="rgba(255,255,255,0.35)" />
+
+                  <View
+                    style={[
+                      styles.offerCardIconWrap,
+                      { backgroundColor: offer.accent + "26", borderColor: offer.accent + "55" },
+                    ]}
+                  >
+                    <MaterialIcons name={offer.icon} size={30} color={offer.accent} />
                   </View>
                 </LinearGradient>
               </TouchableOpacity>
@@ -1439,68 +1454,107 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   offerCardWrap: {
-    marginHorizontal: 4,
-    borderRadius: 18,
+    marginHorizontal: 5,
+    borderRadius: 22,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.32,
+    shadowRadius: 16,
+    elevation: 10,
   },
   offerCard: {
-    width: width * 0.78,
-    height: 130,
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    width: width * 0.82,
+    height: 152,
+    borderRadius: 22,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     flexDirection: "row",
+    alignItems: "center",
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  offerGlow: {
+    position: "absolute",
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    top: -60,
+    right: -40,
+    opacity: 0.28,
+  },
+  offerGlowSm: {
+    position: "absolute",
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    bottom: -38,
+    left: 70,
+    opacity: 0.16,
+  },
+  offerAccentBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
+    opacity: 0.95,
   },
   offerCardTextBox: {
     flex: 1,
+    height: "100%",
     justifyContent: "space-between",
+    zIndex: 2,
   },
   offerCardTag: {
-    color: "#FFF",
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.6,
-    backgroundColor: "rgba(255,255,255,0.22)",
     alignSelf: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderRadius: 999,
-    overflow: "hidden",
+  },
+  offerCardTagText: {
+    color: "#000",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.5,
   },
   offerCardTitle: {
-    color: "#FFF",
-    fontSize: 15,
+    color: "#FFFFFF",
+    fontSize: 18,
     fontWeight: "800",
-    marginTop: 6,
+    letterSpacing: 0.2,
   },
   offerCardSub: {
-    color: "rgba(255,255,255,0.85)",
-    fontSize: 11,
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 11.5,
     fontWeight: "500",
-    marginTop: 2,
+    marginTop: 3,
+    lineHeight: 16,
   },
   offerCta: {
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    gap: 4,
-    marginTop: 8,
+    gap: 5,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 999,
   },
   offerCtaText: {
-    color: "#FFF",
+    color: "#000",
     fontSize: 12,
-    fontWeight: "700",
-    marginRight: 4,
+    fontWeight: "800",
   },
   offerCardIconWrap: {
-    width: 70,
-    alignItems: "flex-end",
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: "center",
     justifyContent: "center",
+    marginLeft: 12,
+    borderWidth: 1,
+    zIndex: 2,
   },
   featureText: {
     color: Theme.colors.primary,
