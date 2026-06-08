@@ -120,6 +120,113 @@ const QuickPayAvatar = ({ billerId, iconInfo }) => {
   );
 };
 
+// =============================================================================
+// Home category swiper
+// =============================================================================
+// Each home section shows its categories in a horizontally paged swiper — 4
+// icons per page, swipe to reveal the rest. Item shape:
+//   { key, label, icon (MaterialIcons), color, bg, screen? , params? }
+// `screen` → navigation.navigate(screen); otherwise navigate("ServiceCategory",
+// params). Category nav params mirror AllServicesScreen so behaviour is identical.
+
+const RECHARGE_ITEMS = [
+  { key: "mobile-prepaid", label: "Mobile\nPrepaid", icon: "phone-android", color: "#10B981", bg: "#E8F5E9", screen: "MobilePrepaid" },
+  { key: "mobile-postpaid", label: "Mobile\nPostpaid", icon: "phone-in-talk", color: "#2196F3", bg: "#E3F2FD", params: { endpoint: "Mobile Postpaid", name: "Postpaid Recharge", btnName: "PostPaid Recharge", reminder: "pay Postpaid Recharge" } },
+  { key: "fastag", label: "FASTag", icon: "directions-car", color: "#FF9800", bg: "#FFF3E0", params: { endpoint: "Fastag", name: "FASTAG Recharge", btnName: "Add New Vehicle", reminder: "Zip through toll Plazas" } },
+  { key: "landline", label: "Landline", icon: "phone", color: "#9C27B0", bg: "#F3E5F5", params: { endpoint: "Landline Postpaid", name: "Landline Postpaid Recharge", btnName: "Add New Landline", reminder: "Pay Landline Plans" } },
+  { key: "dth", label: "DTH", icon: "tv", color: "#7C3AED", bg: "#EDE7F6", params: { endpoint: "DTH", name: "DTH Recharge", btnName: "Recharge DTH", reminder: "Pay DTH Recharge" } },
+  { key: "broadband", label: "Broadband", icon: "wifi", color: "#673AB7", bg: "#EDE7F6", params: { endpoint: "Broadband Postpaid", name: "Broadband Recharge", btnName: "Broadband Recharge", reminder: "Pay Broadband Recharge" } },
+  { key: "cable-tv", label: "Cable TV", icon: "settings-input-antenna", color: "#0EA5E9", bg: "#E1F5FE", params: { endpoint: "Cable TV", name: "Cable TV Recharge", btnName: "Recharge Cable TV", reminder: "Pay Cable TV Recharge" } },
+  { key: "subscription", label: "Subscription", icon: "subscriptions", color: "#EC407A", bg: "#FCE4EC", params: { endpoint: "Subscription", name: "Subscription Recharge", btnName: "Recharge Subscription", reminder: "Pay Subscription Fees" } },
+];
+
+const HOUSING_ITEMS = [
+  { key: "electricity", label: "Electricity", icon: "bolt", color: "#FFC107", bg: "#FFF8E1", params: { endpoint: "Electricity", name: "Electricity Recharge", btnName: "Pay Electricity Bill", reminder: "Pay Electricity Plans" } },
+  { key: "lpg", label: "LPG", icon: "local-fire-department", color: "#F44336", bg: "#FFEBEE", params: { endpoint: "LPG Gas", name: "LPG Recharge", btnName: "Pay LPG Bill", reminder: "Pay LPG Bill" } },
+  { key: "piped-gas", label: "Piped Gas", icon: "fireplace", color: "#E91E63", bg: "#FCE4EC", params: { endpoint: "Gas", name: "piped Gas Recharge", btnName: "Pay Gas Bill", reminder: "Pay Gas Bill" } },
+  { key: "rent", label: "Rent", icon: "home", color: "#009688", bg: "#E0F2F1", params: { endpoint: "Rental", name: "Rent payment", btnName: "Pay Rent", reminder: "Pay Rent payment" } },
+  { key: "water", label: "Water", icon: "water-drop", color: "#03A9F4", bg: "#E1F5FE", params: { endpoint: "Water", name: "Water Bill payment", btnName: "Pay Water Bill", reminder: "Pay Water Bill" } },
+  { key: "prepaid-meter", label: "Prepaid\nMeter", icon: "electric-meter", color: "#FB8C00", bg: "#FFF3E0", params: { endpoint: "Prepaid Meter", name: "Prepaid Meter Recharge", btnName: "Recharge Prepaid Meter", reminder: "Recharge Prepaid Meter" } },
+  { key: "municipal-taxes", label: "Municipal\nTaxes", icon: "account-balance", color: "#795548", bg: "#EFEBE9", params: { endpoint: "Municipal Taxes", name: "Municipal Taxes payment", btnName: "Pay Municipal Taxes", reminder: "Pay Municipal Taxes" } },
+  { key: "municipal-services", label: "Municipal\nServices", icon: "location-city", color: "#607D8B", bg: "#ECEFF1", params: { endpoint: "Municipal Services", name: "Municipal Services payment", btnName: "Pay Municipal Services", reminder: "Pay Municipal Services" } },
+  { key: "housing-society", label: "Housing\nSociety", icon: "apartment", color: "#5C6BC0", bg: "#E8EAF6", params: { endpoint: "Housing Society", name: "Housing Society payment", btnName: "Pay Housing Society", reminder: "Pay Housing Society" } },
+  { key: "clubs", label: "Clubs &\nAssoc.", icon: "groups", color: "#00897B", bg: "#E0F2F1", params: { endpoint: "Clubs and Associations", name: "Clubs and Associations payment", btnName: "Pay Clubs & AssociationsBill", reminder: "Pay AssociationsBill" } },
+];
+
+const FINANCE_ITEMS = [
+  { key: "credit-card", label: "Credit\nCard", icon: "credit-card", color: "#3F51B5", bg: "#E8EAF6", params: { endpoint: "Credit Card", name: "Credit card Bill", btnName: "Pay Credit card Bill", reminder: "Pay Credit card Bill" } },
+  { key: "loan", label: "Loan\nRepayment", icon: "payments", color: "#00BCD4", bg: "#E0F7FA", params: { endpoint: "Loan Repayment", name: "Loan Repayment", btnName: "Pay Loan premium", reminder: "Pay Loan premium" } },
+  { key: "insurance", label: "Insurance", icon: "health-and-safety", color: "#EF5350", bg: "#FFEBEE", params: { endpoint: "Insurance", name: "Insurance premium", btnName: "Pay Insurance premium", reminder: "Pay Insurance premium" } },
+  { key: "recurring-deposit", label: "Recurring\nDeposit", icon: "currency-exchange", color: "#AB47BC", bg: "#F3E5F5", params: { endpoint: "Recurring Deposit", name: "Recurring Deposit", btnName: "Pay Recurring Deposit", reminder: "Pay Recurring Deposit" } },
+  { key: "education", label: "Education\nFees", icon: "school", color: "#FF7043", bg: "#FBE9E7", params: { endpoint: "Education Fees", name: "Education payment", btnName: "Pay Education Fees", reminder: "Pay Education Fees" } },
+  { key: "nps", label: "NPS", icon: "savings", color: "#43A047", bg: "#E8F5E9", params: { endpoint: "National Pension System", name: "NPS payment", btnName: "Pay NPS", reminder: "Pay National Pension" } },
+  { key: "donation", label: "Donation", icon: "volunteer-activism", color: "#EC407A", bg: "#FCE4EC", params: { endpoint: "Donation", name: "Donation", btnName: "Make Donation", reminder: "Make Donation" } },
+  { key: "agent-collection", label: "Agent\nCollection", icon: "badge", color: "#5E35B1", bg: "#EDE7F6", params: { endpoint: "Agent Collection", name: "Agent Collection", btnName: "Pay Agent Collection", reminder: "Pay Agent Collection" } },
+];
+
+// Card inner content width (screen − card margins (14×2) − card padding (15×2)).
+const SWIPER_PAGE_WIDTH = width - 58;
+const SWIPER_CELL_WIDTH = SWIPER_PAGE_WIDTH / 4;
+
+const chunkIntoPages = (arr, size = 4) => {
+  const pages = [];
+  for (let i = 0; i < arr.length; i += size) pages.push(arr.slice(i, i + size));
+  return pages;
+};
+
+const CategorySwiper = ({ items, navigation }) => {
+  const [page, setPage] = useState(0);
+  const pages = chunkIntoPages(items, 4);
+
+  const onMomentumEnd = (e) => {
+    const p = Math.round(e.nativeEvent.contentOffset.x / SWIPER_PAGE_WIDTH);
+    if (p !== page) setPage(p);
+  };
+
+  const handlePress = (item) => {
+    if (item.screen) navigation.navigate(item.screen);
+    else navigation.navigate("ServiceCategory", item.params);
+  };
+
+  return (
+    <View>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={onMomentumEnd}
+        scrollEnabled={pages.length > 1}
+      >
+        {pages.map((grp, gi) => (
+          <View key={gi} style={{ width: SWIPER_PAGE_WIDTH, flexDirection: "row" }}>
+            {grp.map((item) => (
+              <TouchableOpacity
+                key={item.key}
+                style={{ width: SWIPER_CELL_WIDTH, alignItems: "center" }}
+                onPress={() => handlePress(item)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.iconContainer, { backgroundColor: item.bg }]}>
+                  <MaterialIcons name={item.icon} size={24} color={item.color} />
+                </View>
+                <Text style={styles.swiperOptionText}>{item.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ))}
+      </ScrollView>
+
+      {pages.length > 1 && (
+        <View style={styles.swiperDotsRow}>
+          {pages.map((_, i) => (
+            <View key={i} style={[styles.swiperDot, i === page && styles.swiperDotActive]} />
+          ))}
+        </View>
+      )}
+    </View>
+  );
+};
+
 const HomeScreen = () => {
   const [quickPayContacts, setQuickPayContacts] = useState([]);
   const [quickPayLoading, setQuickPayLoading] = useState(false);
@@ -777,65 +884,7 @@ const HomeScreen = () => {
         <View style={styles.rechargeAndPayBillsContainer}>
           <View style={styles.rechargeAndPayBills}>
             <Text style={styles.sectionTitle}>Recharge & Bill Pay</Text>
-            <View style={styles.billOptions}>
-              <TouchableOpacity
-                style={styles.billOption}
-                onPress={() => navigation.navigate("MobilePrepaid")}
-              >
-                <View style={[styles.iconContainer, { backgroundColor: "#E8F5E9" }]}>
-                  <MaterialIcons
-                    name="phone-android"
-                    size={24}
-                    color="#10B981"
-                  />
-                </View>
-                <Text style={styles.billOptionText}>Mobile{"\n"}Prepaid</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.billOption}
-                onPress={() =>
-                  navigation.navigate("ServiceCategory", { endpoint: "Mobile Postpaid", name: "Postpaid Recharge", btnName: "PostPaid Recharge", reminder: "pay Postpaid Recharge" })
-                }
-              >
-                <View style={[styles.iconContainer, { backgroundColor: "#E3F2FD" }]}>
-                  <MaterialIcons
-                    name="phone-in-talk"
-                    size={24}
-                    color="#2196F3"
-                  />
-                </View>
-                <Text style={styles.billOptionText}>Mobile{"\n"}Postpaid</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.billOption}
-                onPress={() =>
-                  navigation.navigate("ServiceCategory", { endpoint: "Fastag", name: "FASTAG Recharge", btnName: "Add New Vehicle", reminder: "Zip through toll Plazas" })
-                }
-              >
-                <View style={[styles.iconContainer, { backgroundColor: "#FFF3E0" }]}>
-                  <MaterialIcons name="directions-car" size={24} color="#FF9800" />
-                </View>
-                <Text style={styles.billOptionText}>FASTag</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.billOption}
-                onPress={() =>
-                  navigation.navigate("ServiceCategory", { endpoint: "Landline Postpaid", name: "Landline Postpaid Recharge", btnName: "Add New Landline", reminder: "Pay Landline Plans" })
-                }
-              >
-                <View style={[styles.iconContainer, { backgroundColor: "#F3E5F5" }]}>
-                  <MaterialIcons
-                    name="phone"
-                    size={24}
-                    color="#9C27B0"
-                  />
-                </View>
-                <Text style={styles.billOptionText}>Landline</Text>
-              </TouchableOpacity>
-            </View>
+            <CategorySwiper items={RECHARGE_ITEMS} navigation={navigation} />
 
             <TouchableOpacity
               style={styles.viewAllButton}
@@ -849,79 +898,7 @@ const HomeScreen = () => {
         <View style={styles.loanSectionContainer}>
           <View style={styles.loanSection}>
             <Text style={styles.sectionTitle}>Housing & Utilities</Text>
-            <View style={styles.loanOptions}>
-              <TouchableOpacity
-                style={styles.loanOption}
-                onPress={() =>
-                  navigation.navigate("ServiceCategory", {
-                    endpoint: "Electricity",
-                    name: "Electricity Recharge",
-                    btnName: "Pay Electricity Bill",
-                    reminder: "Pay Electricity Plans",
-                  })
-                }
-              >
-                <View style={[styles.iconContainer, { backgroundColor: "#FFF8E1" }]}>
-                  <MaterialIcons name="bolt" size={24} color="#FFC107" />
-                </View>
-                <Text style={styles.loanOptionText}>Electricity</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.loanOption}
-                onPress={() =>
-                  navigation.navigate("ServiceCategory", {
-                    endpoint: "LPG Gas",
-                    name: "LPG Recharge",
-                    btnName: "Pay LPG Bill",
-                    reminder: "Pay LPG Bill",
-                  })
-                }
-              >
-                <View style={[styles.iconContainer, { backgroundColor: "#FFEBEE" }]}>
-                  <MaterialIcons
-                    name="local-fire-department"
-                    size={24}
-                    color="#F44336"
-                  />
-                </View>
-                <Text style={styles.loanOptionText}>LPG</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.loanOption}
-                onPress={() =>
-                  navigation.navigate("ServiceCategory", {
-                    endpoint: "Gas",
-                    name: "piped Gas Recharge",
-                    btnName: "Pay Gas Bill",
-                    reminder: "Pay Gas Bill",
-                  })
-                }
-              >
-                <View style={[styles.iconContainer, { backgroundColor: "#FCE4EC" }]}>
-                  <MaterialIcons name="fireplace" size={24} color="#E91E63" />
-                </View>
-                <Text style={styles.loanOptionText}>Piped Gas</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.loanOption}
-                onPress={() =>
-                  navigation.navigate("ServiceCategory", {
-                    endpoint: "Rental",
-                    name: "Rent payment",
-                    btnName: "Pay Rent",
-                    reminder: "Pay Rent payment",
-                  })
-                }
-              >
-                <View style={[styles.iconContainer, { backgroundColor: "#E0F2F1" }]}>
-                  <MaterialIcons name="home" size={24} color="#009688" />
-                </View>
-                <Text style={styles.loanOptionText}>Rent</Text>
-              </TouchableOpacity>
-            </View>
+            <CategorySwiper items={HOUSING_ITEMS} navigation={navigation} />
 
             <TouchableOpacity
               style={styles.viewAllButton}
@@ -934,87 +911,7 @@ const HomeScreen = () => {
 
         <View style={styles.insuranceSection}>
           <Text style={styles.sectionTitle}>Finance</Text>
-          <View style={styles.insuranceOptions}>
-            <TouchableOpacity
-              style={styles.insuranceOption}
-              onPress={() =>
-                navigation.navigate("ServiceCategory", {
-                  endpoint: "Credit Card",
-                  name: "Credit card Bill",
-                  btnName: "Pay Credit card Bill",
-                  reminder: "Pay Credit card Bill",
-                })
-              }
-            >
-              <View style={[styles.iconContainer, { backgroundColor: "#E8EAF6" }]}>
-                <MaterialIcons name="credit-card" size={24} color="#3F51B5" />
-              </View>
-              <Text style={styles.insuranceOptionText}>Credit{"\n"}Card</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.insuranceOption}
-              onPress={() =>
-                navigation.navigate("ServiceCategory", {
-                  endpoint: "Loan Repayment",
-                  name: "Loan Repayment",
-                  btnName: "Pay Loan premium",
-                  reminder: "Pay Loan premium",
-                })
-              }
-            >
-              <View style={[styles.iconContainer, { backgroundColor: "#E0F7FA" }]}>
-                <MaterialIcons name="payments" size={24} color="#00BCD4" />
-              </View>
-              <Text style={styles.insuranceOptionText}>
-                Loan{"\n"}Repayment
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.insuranceOption}
-              onPress={() =>
-                navigation.navigate("ServiceCategory", {
-                  endpoint: "Insurance",
-                  name: "Insurance premium",
-                  btnName: "Pay Insurance premium",
-                  reminder: "Pay Insurance premium",
-                })
-              }
-            >
-              <View style={[styles.iconContainer, { backgroundColor: "#FFEBEE" }]}>
-                <MaterialIcons
-                  name="health-and-safety"
-                  size={24}
-                  color="#EF5350"
-                />
-              </View>
-              <Text style={styles.insuranceOptionText}>Insurance</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.insuranceOption}
-              onPress={() =>
-                navigation.navigate("ServiceCategory", {
-                  endpoint: "Recurring Deposit",
-                  name: "Recurring Deposit",
-                  btnName: "Pay Recurring Deposit",
-                  reminder: "Pay Recurring Deposit",
-                })
-              }
-            >
-              <View style={[styles.iconContainer, { backgroundColor: "#F3E5F5" }]}>
-                <MaterialIcons
-                  name="currency-exchange"
-                  size={24}
-                  color="#AB47BC"
-                />
-              </View>
-              <Text style={styles.insuranceOptionText}>
-                Recurring{"\n"}Deposit
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <CategorySwiper items={FINANCE_ITEMS} navigation={navigation} />
           <TouchableOpacity
             style={styles.viewAllButton}
             onPress={() => navigation.navigate("AllServices")}
@@ -1719,6 +1616,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 5,
     textAlign: "center",
+  },
+  // ---- Category swiper ----
+  swiperOptionText: {
+    color: Theme.colors.primary,
+    fontSize: 12,
+    marginTop: 5,
+    textAlign: "center",
+    paddingHorizontal: 2,
+  },
+  swiperDotsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 14,
+    gap: 6,
+  },
+  swiperDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#D1D5DB",
+  },
+  swiperDotActive: {
+    width: 18,
+    backgroundColor: Theme.colors.primary,
   },
   sectionTitle: {
     fontSize: 16,
