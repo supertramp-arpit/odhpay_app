@@ -1695,8 +1695,7 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
   insuranceSection: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    padding: 15,
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     marginHorizontal: 14,
@@ -1709,7 +1708,8 @@ const styles = StyleSheet.create({
   },
   insuranceOptions: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "space-around",
+    flexWrap: "wrap",
   },
   insuranceOption: {
     alignItems: "center",
