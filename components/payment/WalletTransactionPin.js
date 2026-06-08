@@ -196,18 +196,25 @@ const WalletTransactionPin = () => {
       console.log("Wallet Pay Response:", response?.data);
 
       if (response?.data?.success) {
-        // Navigate to transaction success screen
+        // Navigate to transaction success screen IMMEDIATELY. The wallet is
+        // debited (status "paid") but the bill is still being dispatched to the
+        // biller in a backend background task. The success screen subscribes to
+        // live status (WebSocket push + poll fallback) and auto-updates from
+        // "processing" → "completed"/"failed". We pass the access_token + the
+        // service reference_id so it can watch without an extra round-trip.
         navigation.replace("TransactionSuccess", {
           payment_id: response?.data?.payment_id,
           reference_id: response?.data?.reference_id,
           amount: response?.data?.amount,
           balance_before: response?.data?.balance_before,
           balance_after: response?.data?.balance_after,
-          biller_name: payload?.biller_name || "N/A",
+          biller_name: payload?.biller_name || payload?.bbps_data?.biller_name || "N/A",
           service_type: payload?.service_type || "Payment",
+          category: payload?.category || payload?.bbps_data?.category || "",
           status: response?.data?.status,
           service_request_id: response?.data?.service_request_id,
           payment_method: "wallet",
+          access_token,
         });
       } else {
         Alert.alert("Payment Failed", response?.data?.message || "Unable to process payment.");
