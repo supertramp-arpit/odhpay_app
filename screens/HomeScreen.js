@@ -777,10 +777,10 @@ const HomeScreen = () => {
         {/* Hero illustration */}
         <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 0, paddingBottom: 8 }}>
           <Image
-            source={require("../assets/heroodhpay_trim.png")}
+            source={require("../assets/hero_odhpay_black.png")}
             style={{
-              width: width * 0.42,
-              height: width * 0.42 * (1176 / 925),
+              width: width * 0.52,
+              height: width * 0.52 * (852 / 720),
             }}
             resizeMode="contain"
           />

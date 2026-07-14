@@ -2,68 +2,55 @@ import React, { useEffect, useState } from "react";
 import {
     View,
     Text,
-    Image,
     TouchableOpacity,
     StyleSheet,
-    ScrollView,
     Modal,
     ActivityIndicator,
-    Switch,
-    Dimensions,
     Animated,
-    Platform,
-    StatusBar,
+    InteractionManager,
 } from "react-native";
-import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons";
 import QRCode from "react-native-qrcode-svg";
 import { CommonActions, useNavigation, useFocusEffect } from "@react-navigation/native";
-import { LinearGradient } from "expo-linear-gradient";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+    ArrowLeft,
+    Settings,
+    Landmark,
+    ChevronRight,
+    User,
+    Star,
+    Lock,
+    ShieldCheck,
+    Info,
+    FileText,
+    LogOut,
+} from "lucide-react-native";
+
 import Theme from "../../components/Theme";
 import useUserStore from "../../store/useUserStore";
 import { useBankStore } from "../../store/useBankStore";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useKycDetailStore } from "../../store/useKycStore";
-import { InteractionManager } from "react-native";
-
-const { width } = Dimensions.get("window");
+import { color, space, radius, type, tabularNums, elevation, hitSlop8 } from "../../theme/tokens";
 
 const UserProfileScreen = () => {
     const navigation = useNavigation();
+    const insets = useSafeAreaInsets();
     const [logoutModalVisible, setLogoutModalVisible] = useState(false);
     const [isLoadingLogout, setIsLoadingLogout] = useState(false);
     const [isPrimeMember, setIsPrimeMember] = useState(false);
     const fadeAnim = useState(new Animated.Value(0))[0];
 
-    // Get primary bank from store
+    // Get primary bank from store (real accounts via /payments/get_all_user_accounts)
     const banks = useBankStore((state) => state.banks);
     const primaryBank = banks.find(bank => bank.isPrimary) || banks[0] || null;
 
-    // Check Prime membership status
-    useEffect(() => {
-        const checkPrimeStatus = async () => {
-            try {
-                const primeStatus = await AsyncStorage.getItem('isPrimeMember');
-                setIsPrimeMember(primeStatus === 'true');
-            } catch (error) {
-                console.error('Error checking prime status:', error);
-            }
-        };
-        checkPrimeStatus();
-    }, []);
-
-    // Refresh prime status when screen is focused
+    // Check Prime membership status when screen is focused
     useFocusEffect(
         React.useCallback(() => {
-            const checkPrimeStatus = async () => {
-                try {
-                    const primeStatus = await AsyncStorage.getItem('isPrimeMember');
-                    setIsPrimeMember(primeStatus === 'true');
-                } catch (error) {
-                    console.error('Error checking prime status:', error);
-                }
-            };
-            checkPrimeStatus();
+            AsyncStorage.getItem('isPrimeMember')
+                .then((primeStatus) => setIsPrimeMember(primeStatus === 'true'))
+                .catch(() => { });
         }, [])
     );
 
@@ -98,10 +85,8 @@ const UserProfileScreen = () => {
     const user = useUserStore((s) => s.user);
     const payload = user?.user ? user.user : user;
 
-    // KYC store data
+    // KYC store data (name fallback)
     const kycDetails = useKycDetailStore((s) => s.data);
-
-    // Extract profile data with fallbacks
     const aadhaar =
         kycDetails?.aadhar_details ||
         kycDetails?.aadhaar_details ||
@@ -109,23 +94,11 @@ const UserProfileScreen = () => {
         kycDetails;
 
     const primaryName = payload?.fullname || aadhaar?.name || aadhaar?.full_name || "User";
-    const phoneNumber = payload?.MobileNumber || aadhaar?.phone || "Not available";
-    const email = payload?.Email || aadhaar?.email || "Not available";
-    const maskedAadhaar = aadhaar?.maskedNumber || aadhaar?.masked_aadhaar || aadhaar?.aadharNumber;
-    const hasKyc = !!maskedAadhaar;
-    const avatarInitial = primaryName ? primaryName.charAt(0).toUpperCase() : "U";
-    const qrText = phoneNumber && phoneNumber !== "Not available" ? phoneNumber : "ODHPAY_USER";
+    const phoneNumber = payload?.MobileNumber || aadhaar?.phone || "";
+    // A bare 10-digit number is the format the in-app scanner pays to (wallet P2P)
+    const qrText = phoneNumber || "ODHPAY_USER";
 
-    const aadhaarPhoto = aadhaar?.photo || aadhaar?.profile_image_b64;
-    const profileSource = aadhaarPhoto
-        ? { uri: `data:image/jpeg;base64,${aadhaarPhoto}` }
-        : payload?.profile
-            ? { uri: `https://newapi.odhpay.com/${payload?.profile}`.replace(/\\/g, "/") }
-            : null;
-
-    const handleLogoutPress = () => {
-        setLogoutModalVisible(true);
-    };
+    const handleLogoutPress = () => setLogoutModalVisible(true);
 
     const confirmLogout = async () => {
         setIsLoadingLogout(true);
@@ -148,57 +121,55 @@ const UserProfileScreen = () => {
                 })
             );
         } catch (error) {
-            console.error("Logout error:", error);
             setIsLoadingLogout(false);
         }
     };
 
-    const SettingMenuItem = ({ icon, iconPack = "MaterialIcons", title, onPress, showArrow = true, isDestructive = false, badge = null, isPrime = false }) => (
+    const MenuRow = ({ icon: Icon, title, onPress, badge = null, destructive = false, isLast = false }) => (
         <TouchableOpacity
-            style={styles.menuItem}
+            style={[styles.menuRow, !isLast && styles.menuRowDivider]}
             activeOpacity={0.6}
             onPress={onPress}
+            accessibilityRole="button"
+            accessibilityLabel={title}
         >
-            <View style={[styles.menuIconContainer, isDestructive && styles.destructiveIcon, isPrime && styles.primeIcon]}>
-                {iconPack === "Ionicons" ? (
-                    <Ionicons name={icon} size={20} color={isDestructive ? "#E53935" : isPrime ? "#FFD700" : Theme.colors.primary} />
-                ) : iconPack === "Feather" ? (
-                    <Feather name={icon} size={20} color={isDestructive ? "#E53935" : isPrime ? "#FFD700" : Theme.colors.primary} />
-                ) : (
-                    <MaterialIcons name={icon} size={20} color={isDestructive ? "#E53935" : isPrime ? "#FFD700" : Theme.colors.primary} />
-                )}
+            <View style={[styles.menuIconDisc, destructive && styles.menuIconDiscDestructive]}>
+                <Icon size={18} color={destructive ? color.errorFg : color.text} strokeWidth={2} />
             </View>
-            <Text style={[styles.menuTitle, isDestructive && styles.destructiveText]}>{title}</Text>
+            <Text style={[styles.menuTitle, destructive && styles.menuTitleDestructive]}>{title}</Text>
             {badge && (
                 <View style={styles.menuBadge}>
                     <Text style={styles.menuBadgeText}>{badge}</Text>
                 </View>
             )}
-            {showArrow && (
-                <MaterialIcons name="chevron-right" size={22} color="#D0D0D0" />
-            )}
+            {!destructive && <ChevronRight size={18} color={color.gray300} strokeWidth={2} />}
         </TouchableOpacity>
     );
 
     return (
-        <SafeAreaView style={styles.safeArea} edges={["top"]}>
-            
-            {/* Clean Header */}
-            <View style={styles.headerContainer}>
+        <SafeAreaView style={styles.safeArea} edges={[]}>
+            {/* Header — same safe-area convention as the home screen */}
+            <View style={[styles.headerContainer, { paddingTop: Math.max(insets.top - 20, 8) }]}>
                 <TouchableOpacity
                     onPress={() => navigation.goBack()}
                     activeOpacity={0.7}
-                    style={styles.backButton}
+                    style={styles.headerBtn}
+                    hitSlop={hitSlop8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Go back"
                 >
-                    <Ionicons name="arrow-back" size={22} color="#1a1a1a" />
+                    <ArrowLeft size={20} color={color.text} strokeWidth={2} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Account</Text>
-                <TouchableOpacity 
-                    style={styles.settingsButton} 
+                <TouchableOpacity
+                    style={styles.headerBtn}
                     onPress={() => navigation.navigate("SettingScreen")}
                     activeOpacity={0.7}
+                    hitSlop={hitSlop8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Settings"
                 >
-                    <Feather name="settings" size={20} color="#1a1a1a" />
+                    <Settings size={18} color={color.text} strokeWidth={2} />
                 </TouchableOpacity>
             </View>
 
@@ -207,47 +178,43 @@ const UserProfileScreen = () => {
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
             >
-                {/* QR Code Card */}
-                <View style={styles.qrCard}>
-                    {/* Primary Bank Section */}
-                    <TouchableOpacity 
-                        style={styles.primaryBankCard}
+                {/* Pay card: bank + QR */}
+                <View style={styles.payCard}>
+                    <TouchableOpacity
+                        style={styles.bankRow}
                         activeOpacity={0.7}
                         onPress={() => navigation.navigate("ManageBanksScreen")}
+                        accessibilityRole="button"
+                        accessibilityLabel={primaryBank ? `Primary bank ${primaryBank.bankName}` : "Add bank account"}
                     >
-                        <View style={styles.primaryBankLeft}>
-                            <View style={styles.bankLogoPlaceholder}>
-                                <MaterialIcons name="account-balance" size={22} color="#6B7280" />
-                            </View>
-                            <View style={styles.primaryBankInfo}>
-                                <Text style={styles.primaryBankName}>
-                                    {primaryBank ? primaryBank.bankName : 'Add Bank Account'}
-                                </Text>
-                                <Text style={styles.primaryBankUpi}>
-                                    {primaryBank ? primaryBank.accountNumber : 'Tap to add your bank'}
-                                </Text>
-                            </View>
+                        <View style={styles.bankDisc}>
+                            <Landmark size={18} color={color.textSecondary} strokeWidth={2} />
                         </View>
-                        <View style={styles.primaryBankRight}>
-                            {primaryBank && (
-                                <View style={styles.primaryIndicator}>
-                                    <Text style={styles.primaryIndicatorText}>PRIMARY</Text>
-                                </View>
-                            )}
-                            <MaterialIcons name="chevron-right" size={24} color="#9CA3AF" />
+                        <View style={styles.bankInfo}>
+                            <Text style={styles.bankName} numberOfLines={1}>
+                                {primaryBank ? primaryBank.bankName : 'Add bank account'}
+                            </Text>
+                            <Text style={styles.bankMeta} numberOfLines={1}>
+                                {primaryBank ? primaryBank.accountNumber : 'Tap to link your bank'}
+                            </Text>
                         </View>
+                        {primaryBank && (
+                            <View style={styles.primaryPill}>
+                                <Text style={styles.primaryPillText}>Primary</Text>
+                            </View>
+                        )}
+                        <ChevronRight size={18} color={color.gray300} strokeWidth={2} />
                     </TouchableOpacity>
 
-                    {/* Rendered locally — the previous version sent the user's
-                        phone number to a third-party QR service (quickchart.io).
-                        A bare 10-digit number is the format the in-app scanner
-                        pays to (wallet P2P). */}
+                    {/* Rendered locally — never send the user's number to a
+                        third-party QR service. A bare 10-digit number is the
+                        format the in-app scanner pays to (wallet P2P). */}
                     <View style={styles.qrWrapper}>
                         <QRCode
                             value={qrText}
-                            size={200}
-                            color="#0A0A0B"
-                            backgroundColor="#FFFFFF"
+                            size={188}
+                            color={color.ink900}
+                            backgroundColor={color.white}
                         />
                     </View>
                     <Text style={styles.qrName}>{primaryName}</Text>
@@ -255,79 +222,39 @@ const UserProfileScreen = () => {
                 </View>
 
                 {/* Menu Sections */}
-                <View style={styles.menuSection}>
-                    <Text style={styles.sectionLabel}>Account</Text>
-                    <SettingMenuItem
-                        icon="person-outline"
-                        iconPack="Ionicons"
-                        title="Personal Information"
-                        onPress={() => navigation.navigate("UserProfile")}
-                    />
-                  
-                    <SettingMenuItem
-                        icon="wallet-outline"
-                        iconPack="Ionicons"
-                        title="Bank Accounts"
-                        onPress={() => navigation.navigate("ManageBanksScreen")}
-                    />
-                    <SettingMenuItem
-                        icon={isPrimeMember ? "star" : "star-outline"}
-                        iconPack="Ionicons"
+                <Text style={styles.sectionLabel}>Account</Text>
+                <View style={styles.menuCard}>
+                    <MenuRow icon={User} title="Personal Information" onPress={() => navigation.navigate("UserProfile")} />
+                    <MenuRow icon={Landmark} title="Bank Accounts" onPress={() => navigation.navigate("ManageBanksScreen")} />
+                    <MenuRow
+                        icon={Star}
                         title={isPrimeMember ? "Prime Member" : "Prime Membership"}
                         onPress={() => navigation.navigate("PrimeMembershipScreen")}
                         badge={isPrimeMember ? "ACTIVE" : null}
-                        isPrime={isPrimeMember}
+                        isLast
                     />
                 </View>
 
-                <View style={styles.menuSection}>
-                    <Text style={styles.sectionLabel}>Security</Text>
-                    <SettingMenuItem
-                        icon="lock-closed-outline"
-                        iconPack="Ionicons"
-                        title="Security Settings"
-                        onPress={() => navigation.navigate("SettingScreen")}
-                    />
-                   
-                    <SettingMenuItem
-                        icon="shield-outline"
-                        iconPack="Ionicons"
-                        title="Privacy Policy"
-                        onPress={() => navigation.navigate("PrivacyAndPolicy")}
-                    />
+                <Text style={styles.sectionLabel}>Security</Text>
+                <View style={styles.menuCard}>
+                    <MenuRow icon={Lock} title="Security Settings" onPress={() => navigation.navigate("SettingScreen")} />
+                    <MenuRow icon={ShieldCheck} title="Privacy Policy" onPress={() => navigation.navigate("PrivacyAndPolicy")} isLast />
                 </View>
 
-                <View style={styles.menuSection}>
-                    <Text style={styles.sectionLabel}>More</Text>
-                   
-                    <SettingMenuItem
-                        icon="information-circle-outline"
-                        iconPack="Ionicons"
-                        title="About Us"
-                        onPress={() => navigation.navigate("AboutUs")}
-                    />
-                    <SettingMenuItem
-                        icon="document-text-outline"
-                        iconPack="Ionicons"
-                        title="Terms & Conditions"
-                        onPress={() => navigation.navigate("TermsAndConditions")}
-                    />
+                <Text style={styles.sectionLabel}>More</Text>
+                <View style={styles.menuCard}>
+                    <MenuRow icon={Info} title="About Us" onPress={() => navigation.navigate("AboutUs")} />
+                    <MenuRow icon={FileText} title="Terms & Conditions" onPress={() => navigation.navigate("TermsAndConditions")} isLast />
                 </View>
 
-                {/* Logout Button */}
-                <TouchableOpacity 
-                    style={styles.logoutButton}
-                    onPress={handleLogoutPress}
-                    activeOpacity={0.7}
-                >
-                    <Feather name="log-out" size={20} color="#E53935" />
-                    <Text style={styles.logoutText}>Log Out</Text>
-                </TouchableOpacity>
+                <View style={styles.menuCard}>
+                    <MenuRow icon={LogOut} title="Log Out" onPress={handleLogoutPress} destructive isLast />
+                </View>
 
                 {/* Footer */}
                 <View style={styles.footer}>
-                    <Text style={styles.footerLogo}>{Theme.Text?.Company || 'ODHPAY'}</Text>
-                    <Text style={styles.footerText}>Version 1.0.0</Text>
+                    <Text style={styles.footerLogo}>{Theme.Text?.Company || 'ODHPAY'} PAY</Text>
+                    <Text style={styles.footerText}>Version 1.2.37</Text>
                 </View>
             </Animated.ScrollView>
 
@@ -340,22 +267,24 @@ const UserProfileScreen = () => {
             >
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
-                        <View style={styles.modalIconContainer}>
-                            <Feather name="log-out" size={32} color="#E53935" />
+                        <View style={styles.modalIconDisc}>
+                            <LogOut size={26} color={color.errorFg} strokeWidth={2} />
                         </View>
-                        <Text style={styles.modalTitle}>Log Out?</Text>
+                        <Text style={styles.modalTitle}>Log out?</Text>
                         <Text style={styles.modalText}>
                             You'll need to log in again to access your account.
                         </Text>
 
                         {isLoadingLogout ? (
-                            <ActivityIndicator size="large" color={Theme.colors.primary} style={{ marginVertical: 20 }} />
+                            <ActivityIndicator size="large" color={color.ink900} style={{ marginVertical: space.lg }} />
                         ) : (
                             <View style={styles.modalButtons}>
                                 <TouchableOpacity
                                     style={styles.cancelButton}
                                     onPress={() => setLogoutModalVisible(false)}
                                     activeOpacity={0.7}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Cancel"
                                 >
                                     <Text style={styles.cancelButtonText}>Cancel</Text>
                                 </TouchableOpacity>
@@ -363,6 +292,8 @@ const UserProfileScreen = () => {
                                     style={styles.confirmButton}
                                     onPress={confirmLogout}
                                     activeOpacity={0.7}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Confirm log out"
                                 >
                                     <Text style={styles.confirmButtonText}>Log Out</Text>
                                 </TouchableOpacity>
@@ -378,345 +309,252 @@ const UserProfileScreen = () => {
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: "#FFFFFF",
+        backgroundColor: color.background,
     },
+
+    // Header
     headerContainer: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
-        paddingHorizontal: 20,
-        backgroundColor: "#FFFFFF",
+        paddingHorizontal: space.lg,
+        paddingBottom: space.sm,
+        backgroundColor: color.background,
     },
-    backButton: {
+    headerBtn: {
         width: 40,
         height: 40,
         justifyContent: "center",
         alignItems: "center",
-        backgroundColor: "#F5F5F5",
-        borderRadius: 20,
-    },
-    settingsButton: {
-        width: 40,
-        height: 40,
-        justifyContent: "center",
-        alignItems: "center",
-        backgroundColor: "#F5F5F5",
-        borderRadius: 20,
+        backgroundColor: color.surface,
+        borderRadius: radius.pill,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: color.border,
     },
     headerTitle: {
-        fontSize: 18,
-        fontWeight: "600",
-        color: "#1a1a1a",
+        ...type.h3,
+        color: color.text,
     },
+
     scrollView: {
         flex: 1,
-        backgroundColor: "#F8F9FA",
     },
     scrollContent: {
-        paddingBottom: 40,
+        paddingHorizontal: space.lg,
+        paddingBottom: space.xxl,
     },
-    
-    // QR Card
-    qrCard: {
+
+    // Pay card
+    payCard: {
         alignItems: "center",
-        paddingVertical: 24,
-        paddingHorizontal: 20,
-        backgroundColor: "#FFFFFF",
-        marginBottom: 8,
+        backgroundColor: color.surface,
+        borderRadius: radius.lg,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: color.border,
+        padding: space.lg,
+        marginTop: space.sm,
+        marginBottom: space.lg,
+        ...elevation.level1,
     },
-    // Primary Bank Card
-    primaryBankCard: {
+    bankRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        width: '100%',
-        backgroundColor: '#F8F9FA',
-        borderRadius: 16,
-        padding: 14,
-        marginBottom: 24,
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
+        alignSelf: 'stretch',
+        backgroundColor: color.surfaceMuted,
+        borderRadius: radius.md,
+        padding: space.md,
+        marginBottom: space.lg,
     },
-    primaryBankLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-    },
-    bankLogoContainer: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
-    },
-    bankLogoImage: {
-        width: 28,
-        height: 28,
-    },
-    bankLogoPlaceholder: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        backgroundColor: '#F0F0F0',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
-    },
-    primaryBankInfo: {
-        flex: 1,
-    },
-    primaryBankName: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#1a1a1a',
-        marginBottom: 2,
-    },
-    primaryBankUpi: {
-        fontSize: 13,
-        color: Theme.colors.primary,
-        fontWeight: '500',
-    },
-    primaryBankRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    primaryIndicator: {
-        backgroundColor: '#10B981',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
-    },
-    primaryIndicatorText: {
-        fontSize: 9,
-        fontWeight: '700',
-        color: '#FFF',
-        letterSpacing: 0.5,
-    },
-    qrWrapper: {
-        backgroundColor: '#FFFFFF',
-        padding: 16,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        ...Platform.select({
-            ios: {
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.08,
-                shadowRadius: 8,
-            },
-            android: {
-                elevation: 3,
-            },
-        }),
-    },
-    qrCode: {
-        width: 180,
-        height: 180,
-    },
-    qrName: {
-        fontSize: 16,
-        color: '#0A0A0B',
-        marginTop: 16,
-        fontWeight: '600',
-    },
-    qrHint: {
-        fontSize: 14,
-        color: '#6B7280',
-        marginTop: 2,
-        fontWeight: '500',
-    },
-
-    // Quick Actions
-    quickActions: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        paddingHorizontal: 16,
-        paddingVertical: 20,
-        backgroundColor: '#FFFFFF',
-        marginBottom: 8,
-    },
-    quickActionItem: {
-        alignItems: 'center',
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-    },
-    quickActionIcon: {
-        width: 52,
-        height: 52,
-        borderRadius: 14,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    quickActionLabel: {
-        fontSize: 11,
-        fontWeight: '600',
-        color: '#555',
-        letterSpacing: 0.2,
-    },
-
-    // Menu Section
-    menuSection: {
-        backgroundColor: '#FFFFFF',
-        marginBottom: 8,
-        paddingHorizontal: 20,
-    },
-    sectionLabel: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: '#999',
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-        paddingTop: 20,
-        paddingBottom: 12,
-    },
-    menuItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#F5F5F5',
-    },
-    menuIconContainer: {
+    bankDisc: {
         width: 40,
         height: 40,
-        borderRadius: 12,
-        backgroundColor: Theme.colors.primary + '12',
-        justifyContent: 'center',
+        borderRadius: radius.pill,
+        backgroundColor: color.surface,
         alignItems: 'center',
-        marginRight: 14,
+        justifyContent: 'center',
+        marginRight: space.md,
     },
-    destructiveIcon: {
-        backgroundColor: '#FEE2E2',
-    },
-    primeIcon: {
-        backgroundColor: '#1a1a1a',
-    },
-    menuTitle: {
+    bankInfo: {
         flex: 1,
-        fontSize: 15,
-        fontWeight: '500',
-        color: '#1a1a1a',
     },
-    destructiveText: {
-        color: '#E53935',
+    bankName: {
+        ...type.label,
+        color: color.text,
     },
-    menuBadge: {
-        backgroundColor: '#10B981',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 6,
-        marginRight: 8,
+    bankMeta: {
+        ...type.caption,
+        ...tabularNums,
+        color: color.textSecondary,
+        marginTop: space.xxs,
     },
-    menuBadgeText: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#FFFFFF',
-        letterSpacing: 0.5,
+    primaryPill: {
+        backgroundColor: color.successBg,
+        borderRadius: radius.pill,
+        paddingVertical: space.xxs,
+        paddingHorizontal: space.sm,
+        marginRight: space.sm,
+    },
+    primaryPillText: {
+        ...type.micro,
+        color: color.successFg,
+    },
+    qrWrapper: {
+        backgroundColor: color.white,
+        padding: space.base,
+        borderRadius: radius.lg,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: color.border,
+    },
+    qrName: {
+        ...type.h3,
+        color: color.text,
+        marginTop: space.base,
+    },
+    qrHint: {
+        ...type.bodySm,
+        color: color.textSecondary,
+        marginTop: space.xxs,
     },
 
-    // Logout Button
-    logoutButton: {
+    // Menu
+    sectionLabel: {
+        ...type.micro,
+        color: color.gray400,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        marginBottom: space.sm,
+        marginLeft: space.xs,
+    },
+    menuCard: {
+        backgroundColor: color.surface,
+        borderRadius: radius.lg,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: color.border,
+        paddingHorizontal: space.base,
+        marginBottom: space.lg,
+        ...elevation.level1,
+    },
+    menuRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        marginHorizontal: 20,
-        marginTop: 24,
-        paddingVertical: 16,
-        backgroundColor: '#FEE2E2',
-        borderRadius: 14,
-        gap: 10,
+        minHeight: 56,
+        paddingVertical: space.sm,
     },
-    logoutText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#E53935',
+    menuRowDivider: {
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: color.divider,
+    },
+    menuIconDisc: {
+        width: 36,
+        height: 36,
+        borderRadius: radius.pill,
+        backgroundColor: color.gray150,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: space.md,
+    },
+    menuIconDiscDestructive: {
+        backgroundColor: color.errorBg,
+    },
+    menuTitle: {
+        ...type.body,
+        color: color.text,
+        flex: 1,
+    },
+    menuTitleDestructive: {
+        color: color.errorFg,
+        fontWeight: '500',
+    },
+    menuBadge: {
+        backgroundColor: color.successBg,
+        borderRadius: radius.pill,
+        paddingVertical: space.xxs,
+        paddingHorizontal: space.sm,
+        marginRight: space.sm,
+    },
+    menuBadgeText: {
+        ...type.micro,
+        color: color.successFg,
     },
 
     // Footer
     footer: {
         alignItems: 'center',
-        paddingVertical: 32,
+        marginTop: space.sm,
     },
     footerLogo: {
-        fontSize: 16,
-        fontWeight: '700',
-        color: Theme.colors.primary,
-        marginBottom: 4,
+        ...type.label,
+        color: color.textTertiary,
     },
     footerText: {
-        fontSize: 12,
-        color: '#CCC',
+        ...type.caption,
+        color: color.gray300,
+        marginTop: space.xxs,
     },
 
-    // Modal
+    // Logout modal
     modalOverlay: {
         flex: 1,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        justifyContent: "center",
-        alignItems: "center",
-        padding: 24,
+        backgroundColor: color.overlay,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: space.xl,
     },
     modalContent: {
-        width: "100%",
-        backgroundColor: "#fff",
-        borderRadius: 24,
-        padding: 28,
-        alignItems: "center",
+        alignSelf: 'stretch',
+        alignItems: 'center',
+        backgroundColor: color.surface,
+        borderRadius: radius.xl,
+        padding: space.xl,
     },
-    modalIconContainer: {
+    modalIconDisc: {
         width: 64,
         height: 64,
-        borderRadius: 32,
-        backgroundColor: "#FEE2E2",
-        justifyContent: "center",
-        alignItems: "center",
-        marginBottom: 20,
+        borderRadius: radius.pill,
+        backgroundColor: color.errorBg,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: space.base,
     },
     modalTitle: {
-        fontSize: 22,
-        fontWeight: "700",
-        color: "#1a1a1a",
-        marginBottom: 8,
+        ...type.h3,
+        color: color.text,
+        marginBottom: space.sm,
     },
     modalText: {
-        fontSize: 15,
-        color: "#666",
-        textAlign: "center",
-        lineHeight: 22,
-        marginBottom: 24,
+        ...type.bodySm,
+        color: color.textSecondary,
+        textAlign: 'center',
+        marginBottom: space.xl,
     },
     modalButtons: {
-        flexDirection: "row",
-        width: "100%",
-        gap: 12,
+        flexDirection: 'row',
+        alignSelf: 'stretch',
+        gap: space.md,
     },
     cancelButton: {
         flex: 1,
-        paddingVertical: 14,
-        borderRadius: 12,
-        backgroundColor: "#F5F5F5",
-        alignItems: "center",
+        minHeight: 48,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: color.surfaceMuted,
+        borderRadius: radius.md,
+    },
+    cancelButtonText: {
+        ...type.button,
+        color: color.text,
     },
     confirmButton: {
         flex: 1,
-        paddingVertical: 14,
-        borderRadius: 12,
-        backgroundColor: "#E53935",
-        alignItems: "center",
-    },
-    cancelButtonText: {
-        color: "#1a1a1a",
-        fontSize: 15,
-        fontWeight: "600",
+        minHeight: 48,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: color.error,
+        borderRadius: radius.md,
     },
     confirmButtonText: {
-        color: "#fff",
-        fontSize: 15,
-        fontWeight: "600",
+        ...type.button,
+        color: color.textInverse,
     },
 });
 
