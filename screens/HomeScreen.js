@@ -724,7 +724,7 @@ const HomeScreen = () => {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.heroIconBtn}
-            onPress={() => navigation.navigate("AllServicesScreen")}
+            onPress={() => navigation.navigate("AllServices")}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel="Search services"
