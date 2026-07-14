@@ -23,7 +23,6 @@ import { formatDate } from '../utils/helper';
 const ReferralScreen = () => {
 
   const [referralCode, setReferralCode] = useState('');
-  const [isPrime, setIsPrime] = useState(false);
   const [totalReferrals, setTotalReferrals] = useState(0);
   // const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -43,9 +42,7 @@ const ReferralScreen = () => {
   useEffect(() => {
     // accept both shapes coming from API: { user: {...}} or direct payload
     const payload = user?.user ? user.user : user;
-    console.log(`Referral page user info ->`, payload);
     setReferralCode(payload?.member_id || '');
-    setIsPrime(Boolean(payload?.prime_status));
   }, [user]);
 
 
@@ -76,7 +73,6 @@ const ReferralScreen = () => {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem('access_token');
-      console.log(token)
 
       const headers = {
         "Content-Type": "application/json",
@@ -89,9 +85,6 @@ const ReferralScreen = () => {
         {},  // Empty body, since it's a POST request
         { headers } // Pass headers correctly inside an object
       );
-
-      console.log(`---------------------->`, response.data.data[0])
-
 
       if (response.status === 200) {
         if (response.data && Array.isArray(response.data.data)) {
@@ -116,15 +109,11 @@ const ReferralScreen = () => {
 
 
   const handleWhatsAppShare = () => {
-    if (!isPrime) {
-      Alert.alert('Not Eligible', 'Only Prime users can share referral codes.');
-      return;
-    }
     if (!referralCode) {
       Alert.alert('No referral code', 'Referral code is not available yet.');
       return;
     }
-    const message = `Join ${Theme.Text.Company}  PAY and earn rewards! 🚀\n\nUse my referral code: *${referralCode}* to sign up and get started. 🎉\n\nDownload now: https://odhpay.com/assets/odhpay.apk`;
+    const message = `Join ${Theme.Text.Company} PAY and earn rewards!\n\nUse my referral code *${referralCode}* when you sign up.\n\nDownload: https://odhpay.com/assets/odhpay.apk`;
     const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
 
     Linking.canOpenURL(url)
@@ -176,10 +165,10 @@ const ReferralScreen = () => {
               <Text style={styles.referralCodeLabel}>Your Code</Text>
               <Text style={styles.referralCode}>{referralCode || '—'}</Text>
             </View>
-            <TouchableOpacity style={[styles.copyButton, { opacity: isPrime ? 1 : 0.5 }]} onPress={handleCopyReferral} disabled={!isPrime}>
+            <TouchableOpacity style={styles.copyButton} onPress={handleCopyReferral} accessibilityRole="button" accessibilityLabel="Copy referral code">
               <MaterialIcons name="content-copy" size={20} color="#fff" />
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.shareButton, { opacity: isPrime ? 1 : 0.5 }]} onPress={handleWhatsAppShare} disabled={!isPrime}>
+            <TouchableOpacity style={styles.shareButton} onPress={handleWhatsAppShare} accessibilityRole="button" accessibilityLabel="Share referral code">
               <MaterialIcons name="share" size={20} color="#fff" />
             </TouchableOpacity>
           </View>
@@ -190,7 +179,7 @@ const ReferralScreen = () => {
           <Image source={require('../assets/ReferAndEarn.png')} style={styles.referralImage} />
         </View>
 
-        <TouchableOpacity style={[styles.whatsappButton, { opacity: !isPrime ? 0.5 : 1, }]} onPress={handleWhatsAppShare} disabled={!isPrime}>
+        <TouchableOpacity style={styles.whatsappButton} onPress={handleWhatsAppShare} accessibilityRole="button" accessibilityLabel="Refer via WhatsApp">
           <MaterialIcons name="offline-share" size={24} color="white" />
           <Text style={styles.whatsappButtonText}>Refer via WhatsApp</Text>
         </TouchableOpacity>
@@ -205,6 +194,13 @@ const ReferralScreen = () => {
             onRefresh={ReferalData}
             refreshing={loading}
             scrollEnabled={false}
+            ListEmptyComponent={
+              !loading ? (
+                <Text style={styles.emptyListText}>
+                  No referrals yet — share your code to start earning.
+                </Text>
+              ) : null
+            }
           />
           {loading && <ActivityIndicator style={{ marginTop: 12 }} size="small" color={Theme.colors.primary} />}
         </View>
@@ -312,6 +308,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 10,
+  },
+  emptyListText: {
+    fontSize: 13,
+    color: '#666',
+    paddingVertical: 12,
   },
   referralItem: {
     flexDirection: 'row',
