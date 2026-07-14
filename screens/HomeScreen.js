@@ -666,7 +666,87 @@ const HomeScreen = () => {
 
 
 
+      {/* Fixed top bar — a sibling ABOVE the ScrollView, so it never moves
+          while the page scrolls (and its touch areas can never desync). */}
+      <View
+        style={[
+          styles.heroTopBar,
+          {
+            backgroundColor: "#000000",
+            paddingHorizontal: horizontalGutter,
+            paddingTop: Math.max(safeTop - 20, 8),
+          },
+        ]}
+      >
+        <View style={styles.heroTopLeft}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("UserProfileScreen")}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Your profile"
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <View style={styles.avatarWrap}>
+              <Image source={profileSource} style={styles.avatarImg} />
+            </View>
+          </TouchableOpacity>
+          <View style={{ marginLeft: 10, flexShrink: 1 }}>
+            <TouchableOpacity
+              style={styles.balanceRow}
+              onPress={() => {
+                payload?.TransactionPIN
+                  ? navigation.navigate("checkWallet")
+                  : navigation.navigate("TransactionPin");
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.balanceText}>
+                Balance: ₹{payload?.balance ?? payload?.MainBalance ?? 0}
+              </Text>
+              <Ionicons name="chevron-down" size={14} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.upiIdText} numberOfLines={1}>
+              UPI ID: {payload?.MobileNumber || "—"}@odh
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.heroTopRight}>
+          <TouchableOpacity
+            style={styles.heroIconBtn}
+            onPress={() => navigation.navigate("NotificationScreen")}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Bell size={18} color="#FFFFFF" strokeWidth={2} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.heroIconBtn}
+            onPress={() => navigation.navigate("AllServicesScreen")}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Search services"
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name="search" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.heroIconBtn}
+            onPress={() => navigation.navigate("ScratchCardScreen")}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Rewards"
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <FontAwesome5 name="trophy" size={17} color="#FFD54A" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
       <Animated.ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 90 }}
         showsVerticalScrollIndicator={false}
         bounces={true}
@@ -684,7 +764,7 @@ const HomeScreen = () => {
         onLayout={(e) => setHeroHeight(e.nativeEvent.layout.height)}
         style={[
           styles.heroWrap,
-          { paddingTop: Math.max(safeTop - 20, 8) },
+          { paddingTop: 8 },
         ]}
       >
         {(user?.aadharKycStatus !== "verified" && user?.panKycStatus !== "verified") && (
@@ -693,76 +773,6 @@ const HomeScreen = () => {
             <Text style={styles.kycPillText}>Your KYC Is Pending</Text>
           </TouchableOpacity>
         )}
-
-        {/* Top bar */}
-        <View style={styles.heroTopBar}>
-          <View style={styles.heroTopLeft}>
-            <TouchableOpacity
-              onPress={() => navigation.navigate("UserProfileScreen")}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel="Your profile"
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            >
-              <View style={styles.avatarWrap}>
-                <Image source={profileSource} style={styles.avatarImg} />
-              </View>
-            </TouchableOpacity>
-            <View style={{ marginLeft: 10, flexShrink: 1 }}>
-              <TouchableOpacity
-                style={styles.balanceRow}
-                onPress={() => {
-                  payload?.TransactionPIN
-                    ? navigation.navigate("checkWallet")
-                    : navigation.navigate("TransactionPin");
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.balanceText}>
-                  Balance: ₹{payload?.balance ?? payload?.MainBalance ?? 0}
-                </Text>
-                <Ionicons name="chevron-down" size={14} color="#FFFFFF" />
-              </TouchableOpacity>
-              <Text style={styles.upiIdText} numberOfLines={1}>
-                UPI ID: {payload?.MobileNumber || "—"}@odh
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.heroTopRight}>
-            <TouchableOpacity
-              style={styles.heroIconBtn}
-              onPress={() => navigation.navigate("NotificationScreen")}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Notifications"
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            >
-              <Bell size={18} color="#FFFFFF" strokeWidth={2} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.heroIconBtn}
-              onPress={() => navigation.navigate("AllServicesScreen")}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Search services"
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            >
-              <Ionicons name="search" size={20} color="#FFFFFF" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.heroIconBtn}
-              onPress={() => navigation.navigate("ScratchCardScreen")}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Rewards"
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            >
-              <FontAwesome5 name="trophy" size={17} color="#FFD54A" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
 
         {/* Hero illustration */}
         <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 0, paddingBottom: 8 }}>
