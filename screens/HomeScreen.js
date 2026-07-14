@@ -816,13 +816,10 @@ const HomeScreen = () => {
         )}
 
         <View style={[styles.card, styles.features]}>
-          {/* Wallet shortcut intentionally disabled (owner request, 2026-07-14) —
-              re-enable by restoring onPress and removing `disabled`/opacity. */}
-          <TouchableOpacity
-            disabled
-            accessibilityState={{ disabled: true }}
-            style={{ opacity: 0.4 }}
-          >
+          {/* Wallet shortcut intentionally inert (owner request, 2026-07-14) —
+              looks normal but doesn't navigate. Re-enable by restoring
+              onPress={() => navigation.navigate("Wallet")}. */}
+          <TouchableOpacity disabled>
             <View style={styles.feature}>
               <LinearGradient
                 colors={["#34D399", "#059669"]}
