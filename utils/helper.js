@@ -20,4 +20,19 @@ function normalizeIndianMobile(value) {
     return digits.length >= 10 ? digits.slice(-10) : "";
 }
 
-export { formatDate, correctPath, normalizeIndianMobile };
+// ₹ with Indian digit grouping (₹1,23,456.00). Engine-safe: no reliance on
+// Hermes Intl. Pass { decimals: 0 } for whole-rupee display.
+function formatINR(value, { decimals = 2 } = {}) {
+    const n = Number(value ?? 0);
+    const safe = Number.isFinite(n) ? n : 0;
+    const sign = safe < 0 ? '-' : '';
+    const [intPart, fracPart] = Math.abs(safe).toFixed(decimals).split('.');
+    const last3 = intPart.slice(-3);
+    const rest = intPart.slice(0, -3);
+    const grouped = rest
+        ? `${rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',')},${last3}`
+        : last3;
+    return `₹${sign}${grouped}${decimals > 0 ? `.${fracPart}` : ''}`;
+}
+
+export { formatDate, correctPath, normalizeIndianMobile, formatINR };

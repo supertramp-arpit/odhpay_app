@@ -1,58 +1,78 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Image,
-  ActivityIndicator,
+  Modal,
+  Animated,
   Dimensions,
-  Platform,
+  RefreshControl,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Modal, Portal, PaperProvider } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import ScratchReward from '../reward/ScratchReward';
-import Theme from '../Theme';
-import { useAppStore } from '../../store/useAppStore';
-import { formatDate } from '../../utils/helper';
+import { Gift, Clock3, Check, CircleAlert, Share2 } from 'lucide-react-native';
 
-const { width, height } = Dimensions.get('window');
-const CARD_WIDTH = Math.max((width - 48) / 2, 155);
-const CARD_HEIGHT = Math.max(Math.round(CARD_WIDTH * 1.25), 200);
+import ScratchReward from './ScratchReward';
+import { useAppStore, loadScratchedIds } from '../../store/useAppStore';
+import { formatDate, formatINR } from '../../utils/helper';
+import { color, space, radius, type, tabularNums, elevation } from '../../theme/tokens';
 
+const { width } = Dimensions.get('window');
+const GRID_GUTTER = space.lg;
+const CARD_GAP = space.md;
+const CARD_WIDTH = Math.floor((width - GRID_GUTTER * 2 - CARD_GAP) / 2);
+const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.22);
+
+// ---------------------------------------------------------------------------
+// Skeleton — pulsing placeholders while rewards load
+// ---------------------------------------------------------------------------
+const SkeletonBlock = ({ style }) => {
+  const pulse = useRef(new Animated.Value(0.5)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.5, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  return <Animated.View style={[styles.skeleton, style, { opacity: pulse }]} />;
+};
+
+const LoadingState = () => (
+  <View style={styles.stateWrap}>
+    <SkeletonBlock style={styles.skeletonSummary} />
+    <View style={styles.skeletonGrid}>
+      {[0, 1, 2, 3].map((i) => (
+        <SkeletonBlock key={i} style={styles.skeletonCard} />
+      ))}
+    </View>
+  </View>
+);
+
+// ---------------------------------------------------------------------------
+// Screen
+// ---------------------------------------------------------------------------
 const ScratchCardScreen = () => {
-  const [loading, setLoading] = useState(false);
+  const navigation = useNavigation();
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
   const [visible, setVisible] = useState(false);
   const [selectedScratchCard, setSelectedScratchCard] = useState(null);
   const { scratchCards, setScratchCards } = useAppStore();
 
-  const containerStyle = useMemo(
-    () => ({
-      alignSelf: 'center',
-      width: Math.min(width - 40, 340),
-      height: Math.min(height * 0.7, 520),
-      borderRadius: 28,
-      backgroundColor: 'transparent',
-      overflow: 'hidden',
-    }),
-    []
-  );
-
-  const handleScratchCard = (item) => {
-    if (!item?.IsRedeemable || item?.IsScratched) return;
-    setSelectedScratchCard(item);
-    setVisible(true);
-  };
-
-  const fetchScratchCards = async () => {
+  const fetchScratchCards = useCallback(async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isRefresh) setLoading(true);
+      setError(null);
+
       const token = await AsyncStorage.getItem('access_token');
       const userJSON = await AsyncStorage.getItem('user');
       let memberId = null;
@@ -65,594 +85,433 @@ const ScratchCardScreen = () => {
         }
       }
       if (!memberId) {
-        setLoading(false);
-        setRefreshing(false);
+        setScratchCards([]);
         return;
       }
 
-      const headers = {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Authorization: `Bearer ${token}`,
-      };
-      const response = await axios.get(
-        `https://newapi.odhpay.com/referral/lcrmoneydetail?userid=${memberId}`,
-        { headers }
-      );
+      // /referral/scratch-cards returns stable ids (lcrmoney.srno), newest
+      // first — unlike /lcrmoneydetail which has no id and no ordering.
+      const [response, scratchedIds] = await Promise.all([
+        axios.get(
+          `https://newapi.odhpay.com/referral/scratch-cards?userid=${memberId}`,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        ),
+        loadScratchedIds(),
+      ]);
 
-      if (response.status === 200 && Array.isArray(response.data.data)) {
-        const cards = response.data.data.map((item, index) => ({
-          id: item.id || index,
-          amount: item.amount || item.value || 0,
-          receivedDate: item.date || item.receivedDate || item.created_at,
-          IsScratched: item.status === 1 || item.is_scratched === 1 || item.IsScratched,
-          IsRedeemable: (item.amount || item.value || 0) > 0,
-        }));
+      if (response.status === 200 && Array.isArray(response.data?.data)) {
+        const cards = response.data.data.map((item, index) => {
+          const id = item.id ?? `row-${index}`;
+          const amount = Number(item.amount ?? 0);
+          return {
+            id,
+            amount,
+            receivedDate: item.receivedDate || item.date || null,
+            // Reveal state is device-local: the money is already credited
+            // server-side; the backend has no scratched flag.
+            IsScratched: scratchedIds.has(String(id)),
+            IsRedeemable: amount > 0,
+          };
+        });
         setScratchCards(cards);
+      } else {
+        setScratchCards([]);
       }
-    } catch (error) {
-      console.error('Error fetching scratch cards', error?.response || error?.message || error);
+    } catch (e) {
+      setError('Couldn’t load your rewards');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [setScratchCards]);
 
   useEffect(() => {
     fetchScratchCards();
+  }, [fetchScratchCards]);
+
+  const stats = useMemo(() => {
+    const total = scratchCards.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+    const unopened = scratchCards.filter((c) => c.IsRedeemable && !c.IsScratched).length;
+    return { total, unopened };
+  }, [scratchCards]);
+
+  const handleScratchCard = useCallback((item) => {
+    if (!item?.IsRedeemable || item?.IsScratched) return;
+    setSelectedScratchCard(item);
+    setVisible(true);
   }, []);
 
-  const renderCard = ({ item, index }) => {
-    const isRedeemable = item?.IsRedeemable !== false;
-    const isScratched = !!item?.IsScratched;
-    const amount = item?.amount ?? 0;
-    const rewardText = `₹${amount}`;
-    const dateText = item?.receivedDate ? formatDate(item.receivedDate) : '';
+  const closeModal = useCallback(() => {
+    setVisible(false);
+    setSelectedScratchCard(null);
+  }, []);
 
-    return (
-      <TouchableOpacity
-        activeOpacity={isRedeemable && !isScratched ? 0.85 : 1}
-        style={[styles.cardContainer, !isRedeemable && styles.cardDisabled]}
-        onPress={() => handleScratchCard(item)}
-        accessibilityRole="button"
-        accessibilityLabel={`Scratch card ${index + 1}. ${isScratched ? 'Already opened' : 'Tap to open'}`}
-      >
-        {isScratched ? (
-          // Revealed Card Design
-          <LinearGradient
-            colors={['#1a1f35', '#0d1321']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.revealedCard}
-          >
-            {/* Decorative Elements */}
-            <View style={styles.decorCircle1} />
-            <View style={styles.decorCircle2} />
-            
-            {/* Status Badge */}
-            <View style={styles.cardTopRow}>
-              <View style={styles.revealedBadge}>
-                <MaterialIcons name="check-circle" size={12} color="#10b981" />
-                <Text style={styles.revealedBadgeText}>Claimed</Text>
-              </View>
+  const renderCard = useCallback(
+    ({ item, index }) => {
+      const isScratched = !!item?.IsScratched;
+      const amount = Number(item?.amount ?? 0);
+      const dateText = item?.receivedDate ? formatDate(item.receivedDate) : '';
+
+      if (isScratched) {
+        // Revealed — quiet paper card, credited amount in the one money-green
+        return (
+          <View style={[styles.card, styles.cardRevealed]}>
+            <View style={styles.claimedBadge}>
+              <Check size={12} color={color.successFg} strokeWidth={2.5} />
+              <Text style={styles.claimedBadgeText}>Claimed</Text>
             </View>
-
-            {/* Reward Display */}
-            <View style={styles.rewardSection}>
-              <View style={styles.coinIconContainer}>
-                <LinearGradient
-                  colors={['#fbbf24', '#f59e0b']}
-                  style={styles.coinIcon}
-                >
-                  <Text style={styles.coinSymbol}>₹</Text>
-                </LinearGradient>
-              </View>
-              <Text style={styles.rewardAmount}>{rewardText}</Text>
-              <Text style={styles.rewardLabel}>Added to Wallet</Text>
+            <View style={styles.cardCenter}>
+              <Text style={styles.revealedAmount}>{formatINR(amount)}</Text>
+              <Text style={styles.revealedCaption}>Added to wallet</Text>
             </View>
-
-            {/* Date Footer */}
             <View style={styles.cardFooter}>
-              <MaterialIcons name="access-time" size={12} color="#64748b" />
-              <Text style={styles.dateText}>{dateText || 'Recently'}</Text>
+              <Clock3 size={12} color={color.textTertiary} strokeWidth={2} />
+              <Text style={styles.cardFooterText}>{dateText || 'Recently'}</Text>
             </View>
-          </LinearGradient>
-        ) : (
-          // Unscratched Card Design
-          <View style={styles.unscratchedCard}>
-            <LinearGradient
-              colors={['#6366f1', '#8b5cf6', '#a855f7']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.unscratchedGradient}
-            >
-              {/* Shine Effect */}
-              <View style={styles.shineEffect} />
-              
-              {/* Scratch Pattern */}
-              <View style={styles.scratchPatternContainer}>
-                <View style={styles.scratchPattern}>
-                  {[...Array(6)].map((_, i) => (
-                    <View key={i} style={styles.scratchLine} />
-                  ))}
-                </View>
-              </View>
-
-              {/* Center Content */}
-              <View style={styles.unscratchedContent}>
-                <View style={styles.giftIconContainer}>
-                  <MaterialIcons name="card-giftcard" size={36} color="#fff" />
-                </View>
-                <Text style={styles.scratchTitle}>Mystery Reward</Text>
-                <Text style={styles.scratchSubtitle}>Scratch to reveal</Text>
-              </View>
-
-              {/* Bottom Action */}
-              <View style={styles.scratchAction}>
-                <View style={styles.scratchButton}>
-                  <MaterialIcons name="touch-app" size={16} color="#8b5cf6" />
-                  <Text style={styles.scratchButtonText}>Tap to Scratch</Text>
-                </View>
-              </View>
-
-              {/* Lock Overlay */}
-              {!isRedeemable && (
-                <View style={styles.lockOverlay}>
-                  <View style={styles.lockIconBox}>
-                    <MaterialIcons name="lock" size={24} color="#fff" />
-                  </View>
-                  <Text style={styles.lockMessage}>Complete a transaction to unlock</Text>
-                </View>
-              )}
-            </LinearGradient>
           </View>
-        )}
-      </TouchableOpacity>
-    );
-  };
+        );
+      }
+
+      // Face-down — ink card, one gift mark, an invitation not a circus
+      return (
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={[styles.card, styles.cardFaceDown]}
+          onPress={() => handleScratchCard(item)}
+          accessibilityRole="button"
+          accessibilityLabel={`Scratch card ${index + 1}, tap to scratch and reveal your reward`}
+        >
+          <View style={styles.giftDisc}>
+            <Gift size={26} color={color.textInverse} strokeWidth={1.75} />
+          </View>
+          <Text style={styles.faceDownTitle}>Scratch & win</Text>
+          <Text style={styles.faceDownCaption}>Tap to reveal</Text>
+        </TouchableOpacity>
+      );
+    },
+    [handleScratchCard]
+  );
+
+  const listHeader = (
+    <View style={styles.summaryCard}>
+      <View style={styles.summaryLeft}>
+        <Text style={styles.summaryLabel}>Total rewards earned</Text>
+        <Text style={styles.summaryAmount}>{formatINR(stats.total)}</Text>
+      </View>
+      {stats.unopened > 0 && (
+        <View style={styles.unopenedPill}>
+          <Text style={styles.unopenedPillText}>
+            {stats.unopened} to scratch
+          </Text>
+        </View>
+      )}
+    </View>
+  );
 
   return (
-    <PaperProvider>
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <Portal>
-          <Modal
-            visible={visible}
-            onDismiss={() => setVisible(false)}
-            contentContainerStyle={containerStyle}
-            theme={{ colors: { backdrop: 'rgba(0,0,0,0.85)' } }}
-          >
-            {selectedScratchCard && (
-              <ScratchReward 
-                item={selectedScratchCard} 
-                onClose={() => setVisible(false)} 
-              />
-            )}
-          </Modal>
-        </Portal>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={closeModal}
+      >
+        <View style={styles.modalScrim}>
+          {selectedScratchCard && (
+            <ScratchReward item={selectedScratchCard} onClose={closeModal} />
+          )}
+        </View>
+      </Modal>
 
-   
-        {loading ? (
-          <View style={styles.loadingOverlay}>
-            <View style={styles.loadingBox}>
-              <ActivityIndicator size="large" color="#8b5cf6" />
-              <Text style={styles.loadingText}>Loading rewards...</Text>
-            </View>
+      {loading ? (
+        <LoadingState />
+      ) : error ? (
+        <View style={styles.stateCenter}>
+          <View style={[styles.stateDisc, { backgroundColor: color.errorBg }]}>
+            <CircleAlert size={28} color={color.errorFg} strokeWidth={2} />
           </View>
-        ) : scratchCards?.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIconBox}>
-              <MaterialIcons name="card-giftcard" size={48} color="#6366f1" />
-            </View>
-            <Text style={styles.emptyTitle}>No scratch cards yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Invite friends using your referral code to earn exciting scratch card rewards!
+          <Text style={styles.stateTitle}>{error}</Text>
+          <Text style={styles.stateBody}>
+            Check your connection and try again.
+          </Text>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={() => fetchScratchCards()}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading rewards"
+          >
+            <Text style={styles.primaryBtnText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      ) : scratchCards.length === 0 ? (
+        <View style={styles.stateCenter}>
+          <View style={styles.stateDisc}>
+            <Gift size={30} color={color.textSecondary} strokeWidth={1.75} />
+          </View>
+          <Text style={styles.stateTitle}>No rewards yet</Text>
+          <Text style={styles.stateBody}>
+            Invite friends with your referral code and earn scratch-card
+            rewards when they join.
+          </Text>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={() => navigation.navigate('ReferralScreen')}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Invite friends and earn rewards"
+          >
+            <Share2 size={16} color={color.textInverse} strokeWidth={2} />
+            <Text style={[styles.primaryBtnText, { marginLeft: space.sm }]}>
+              Invite & earn
             </Text>
-            <TouchableOpacity style={styles.primaryBtn} onPress={() => {}} activeOpacity={0.8}>
-              <LinearGradient
-                colors={['#6366f1', '#8b5cf6']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.primaryBtnGradient}
-              >
-                <MaterialIcons name="share" size={18} color="#fff" />
-                <Text style={styles.primaryBtnText}>Share Referral Code</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <FlatList
-            data={scratchCards}
-            keyExtractor={(item, index) => (item?.id ? String(item.id) : `scratch-${index}`)}
-            numColumns={2}
-            renderItem={renderCard}
-            contentContainerStyle={styles.flatListContent}
-            columnWrapperStyle={styles.columnWrapper}
-            showsVerticalScrollIndicator={false}
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchScratchCards();
-            }}
-          />
-        )}
-      </SafeAreaView>
-    </PaperProvider>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={scratchCards}
+          keyExtractor={(item, index) => (item?.id != null ? String(item.id) : `scratch-${index}`)}
+          numColumns={2}
+          renderItem={renderCard}
+          ListHeaderComponent={listHeader}
+          contentContainerStyle={styles.listContent}
+          columnWrapperStyle={styles.columnWrapper}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                fetchScratchCards(true);
+              }}
+              tintColor={color.ink900}
+              colors={[color.ink900]}
+            />
+          }
+        />
+      )}
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0e1a',
+    backgroundColor: color.background,
   },
-  
-  // Hero Header
-  heroGradient: {
-    paddingBottom: 16,
-  },
-  hero: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
+
+  // Summary
+  summaryCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: color.border,
+    paddingVertical: space.base,
+    paddingHorizontal: space.lg,
+    marginBottom: space.lg,
+    ...elevation.level1,
   },
-  heroContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+  summaryLeft: {
+    flexShrink: 1,
   },
-  heroIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: 'rgba(251, 191, 36, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
+  summaryLabel: {
+    ...type.caption,
+    color: color.textSecondary,
+    marginBottom: space.xs,
   },
-  heroTextBlock: {
-    flex: 1,
+  summaryAmount: {
+    ...type.h1,
+    ...tabularNums,
+    color: color.moneyCredit,
   },
-  heroTitle: {
-    color: '#f1f5f9',
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: 0.3,
+  unopenedPill: {
+    backgroundColor: color.ink900,
+    borderRadius: radius.pill,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.md,
   },
-  heroSubtitle: {
-    color: '#94a3b8',
-    marginTop: 4,
-    fontSize: 14,
+  unopenedPillText: {
+    ...type.micro,
+    ...tabularNums,
+    color: color.textInverse,
   },
-  refreshBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(165, 180, 252, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  
-  // Stats Row
-  statsRow: {
-    flexDirection: 'row',
-    marginHorizontal: 20,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    color: '#f1f5f9',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  statLabel: {
-    color: '#64748b',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    marginVertical: 4,
-  },
-  
-  // FlatList
-  flatListContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 32,
+
+  // Grid
+  listContent: {
+    paddingHorizontal: GRID_GUTTER,
+    paddingTop: space.lg,
+    paddingBottom: space.xxl,
   },
   columnWrapper: {
     justifyContent: 'space-between',
   },
-  
-  // Card Container
-  cardContainer: {
+
+  // Cards
+  card: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
-    marginBottom: 16,
-    borderRadius: 20,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#6366f1',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.25,
-        shadowRadius: 16,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
-  },
-  cardDisabled: {
-    opacity: 0.5,
-  },
-  
-  // Revealed Card
-  revealedCard: {
-    flex: 1,
-    padding: 16,
-    justifyContent: 'space-between',
-    borderRadius: 20,
+    borderRadius: radius.lg,
+    marginBottom: CARD_GAP,
     overflow: 'hidden',
   },
-  decorCircle1: {
-    position: 'absolute',
-    top: -30,
-    right: -30,
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
-  },
-  decorCircle2: {
-    position: 'absolute',
-    bottom: -20,
-    left: -20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-  },
-  revealedBadge: {
-    flexDirection: 'row',
+  cardFaceDown: {
+    backgroundColor: color.ink900,
+    borderWidth: 1,
+    borderColor: color.ink700,
     alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  revealedBadgeText: {
-    color: '#10b981',
-    fontSize: 11,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  rewardSection: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  coinIconContainer: {
-    marginBottom: 8,
-  },
-  coinIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
     justifyContent: 'center',
+    padding: space.base,
+    ...elevation.level2,
+  },
+  giftDisc: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.pill,
+    backgroundColor: color.pressTintInverse,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: space.md,
+  },
+  faceDownTitle: {
+    ...type.h3,
+    color: color.textInverse,
+  },
+  faceDownCaption: {
+    ...type.caption,
+    color: color.gray400,
+    marginTop: space.xs,
+  },
+  cardRevealed: {
+    backgroundColor: color.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: color.border,
+    padding: space.md,
+    justifyContent: 'space-between',
+    ...elevation.level1,
+  },
+  claimedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: color.successBg,
+    borderRadius: radius.pill,
+    paddingVertical: space.xs,
+    paddingHorizontal: space.sm,
+  },
+  claimedBadgeText: {
+    ...type.micro,
+    color: color.successFg,
+    marginLeft: space.xs,
+  },
+  cardCenter: {
     alignItems: 'center',
   },
-  coinSymbol: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '800',
+  revealedAmount: {
+    ...type.h2,
+    ...tabularNums,
+    color: color.moneyCredit,
   },
-  rewardAmount: {
-    color: '#f1f5f9',
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  rewardLabel: {
-    color: '#64748b',
-    fontSize: 12,
-    marginTop: 4,
+  revealedCaption: {
+    ...type.caption,
+    color: color.textSecondary,
+    marginTop: space.xs,
   },
   cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dateText: {
-    color: '#64748b',
-    fontSize: 11,
-    marginLeft: 4,
+  cardFooterText: {
+    ...type.caption,
+    ...tabularNums,
+    color: color.textTertiary,
+    marginLeft: space.xs,
   },
-  
-  // Unscratched Card
-  unscratchedCard: {
+
+  // Modal
+  modalScrim: {
     flex: 1,
-    borderRadius: 20,
-    overflow: 'hidden',
+    backgroundColor: color.overlay,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  unscratchedGradient: {
+
+  // Shared state layouts
+  stateWrap: {
     flex: 1,
-    justifyContent: 'space-between',
-    padding: 16,
-    position: 'relative',
-    overflow: 'hidden',
+    paddingHorizontal: GRID_GUTTER,
+    paddingTop: space.lg,
   },
-  shineEffect: {
-    position: 'absolute',
-    top: -50,
-    right: -50,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-  },
-  scratchPatternContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    opacity: 0.1,
-  },
-  scratchPattern: {
-    width: '100%',
-    height: '100%',
-  },
-  scratchLine: {
-    height: 2,
-    backgroundColor: '#fff',
-    marginVertical: 12,
-    borderRadius: 1,
-  },
-  unscratchedContent: {
+  stateCenter: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: space.xxl,
+    paddingTop: space.giant,
   },
-  giftIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
+  stateDisc: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.pill,
+    backgroundColor: color.gray150,
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'center',
+    marginBottom: space.lg,
   },
-  scratchTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
+  stateTitle: {
+    ...type.h3,
+    color: color.text,
+    marginBottom: space.sm,
     textAlign: 'center',
   },
-  scratchSubtitle: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: 12,
-    marginTop: 4,
+  stateBody: {
+    ...type.bodySm,
+    color: color.textSecondary,
     textAlign: 'center',
-  },
-  scratchAction: {
-    alignItems: 'center',
-  },
-  scratchButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-  },
-  scratchButtonText: {
-    color: '#6366f1',
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  lockOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  lockIconBox: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  lockMessage: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 11,
-    textAlign: 'center',
-    paddingHorizontal: 16,
-  },
-  
-  // Loading
-  loadingOverlay: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingBox: {
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#94a3b8',
-    marginTop: 12,
-    fontSize: 14,
-  },
-  
-  // Empty State
-  emptyState: {
-    flex: 1,
-    paddingHorizontal: 32,
-    paddingTop: 60,
-    alignItems: 'center',
-  },
-  emptyIconBox: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  emptyTitle: {
-    color: '#f1f5f9',
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    color: '#64748b',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 28,
-    lineHeight: 22,
     maxWidth: 280,
+    marginBottom: space.xl,
   },
   primaryBtn: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  primaryBtnGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
+    justifyContent: 'center',
+    minHeight: 48,
+    backgroundColor: color.ink900,
+    borderRadius: radius.md,
+    paddingHorizontal: space.xl,
   },
   primaryBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 15,
-    marginLeft: 8,
+    ...type.button,
+    color: color.textInverse,
+  },
+
+  // Skeletons
+  skeleton: {
+    backgroundColor: color.gray150,
+    borderRadius: radius.lg,
+  },
+  skeletonSummary: {
+    height: 84,
+    marginBottom: space.lg,
+  },
+  skeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  skeletonCard: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    marginBottom: CARD_GAP,
   },
 });
 

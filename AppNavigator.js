@@ -901,7 +901,7 @@ export default function AppNavigator() {
                   component={ScratchCardScreen}
                   options={{
                     headerShown: true,
-                    headerTitle: "Scratch and win Rewards",
+                    headerTitle: "Scratch & Win",
                     headerStyle: {
                       backgroundColor: Theme.colors.primary,
                     },

@@ -10,57 +10,18 @@ import {
 } from '@shopify/react-native-skia';
 import { View, StyleSheet, Animated, Easing } from 'react-native';
 import { useAppStore } from '../../store/useAppStore';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios';
 
 // Threshold percentage to auto-reveal (like Google Pay - 50%)
 const REVEAL_THRESHOLD = 50;
 
 export const ScratchCard = ({ style, children, image, img_id, onScratchProgress, onScratchComplete }) => {
 
-  // Zustand state
+  // Zustand state. updateScratchStatus also persists the id to AsyncStorage —
+  // there is no backend "scratched" flag (the reward is already credited),
+  // so reveal state is device-local. (An old scratch_voucher API call here
+  // pointed at a dev LAN IP and never worked; removed.)
   const { scratchCards, updateScratchStatus } = useAppStore();
 
-
-  // ===========================================================================================
-  // Scratch Card Functionality when user scratch the card
-  // ===========================================================================================
-  const ScratchVoucher = async (img_id) => {
-    try {
-      console.log(img_id)
-
-      const token = await AsyncStorage.getItem('access_token');
-
-      const headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "Authorization": `Bearer ${token}`,
-      };
-      const response = await axios.post(`http://192.168.1.23:8002/network/scratch_voucher`, {
-        "voucherid": img_id
-      }, { headers });
-      console.log(`this is scratch card------>`, response.data);
-      if (response.status === 200) {
-        console.log("card SCRATCHED successfully")
-      }
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        console.error("Axios Error:", error.response?.status, error.response?.data);
-
-        if (error.response?.status === 404) {
-          Alert.alert("Error", "Requested resource not found (404)");
-        }
-      } else {
-        console.error("Unexpected Error:", error);
-        Alert.alert("Error", "Something went wrong!");
-      }
-    }
-  }
-
-
-
-
-  // ===========================================================================================
   const [[width, height], setSize] = useState([0, 0]);
   const path = useRef(Skia.Path.Make());
   const [scratchedPixels, setScratchedPixels] = useState(0);
@@ -100,7 +61,6 @@ export const ScratchCard = ({ style, children, image, img_id, onScratchProgress,
       useNativeDriver: true,
     }).start(() => {
       updateScratchStatus(img_id);
-      ScratchVoucher(img_id);
       onScratchComplete?.();
     });
   }, [isAutoRevealing, isRevealed, img_id]);

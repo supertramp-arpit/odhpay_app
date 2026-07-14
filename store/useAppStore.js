@@ -1,30 +1,44 @@
 // stores/useAppStore.js
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Scratched-card ids revealed on this device. The reward money is already
+// credited server-side (lcrmoney rows) — the backend has no "scratched" flag,
+// so the reveal state lives locally. Ids are lcrmoney.srno (globally unique).
+export const SCRATCHED_IDS_KEY = '@odhpay/scratched_card_ids';
+
+export const loadScratchedIds = async () => {
+    try {
+        const raw = await AsyncStorage.getItem(SCRATCHED_IDS_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+    } catch {
+        return new Set();
+    }
+};
+
+const persistScratchedId = async (id) => {
+    try {
+        const ids = await loadScratchedIds();
+        ids.add(String(id));
+        await AsyncStorage.setItem(SCRATCHED_IDS_KEY, JSON.stringify([...ids]));
+    } catch {
+        // non-fatal: card will show unscratched again next launch
+    }
+};
 
 export const useAppStore = create((set) => ({
     // Scratch Cards
-    scratchCards: [
-        {
-            id: 1,
-            IsScratched: false,
-            receivedDate: '2024-06-01',
-            amount: 100,
-            IsRedeemable: true
-        },
-        {
-            id: 2,
-            IsScratched: true,
-            receivedDate: '2024-06-01',
-            amount: 100,
-            IsRedeemable: true
-        }
-    ],
+    scratchCards: [],
     setScratchCards: (updatedCards) => set({ scratchCards: updatedCards }),
-    updateScratchStatus: (id) => set((state) => ({
-        scratchCards: state.scratchCards.map(card =>
-            card.id === id ? { ...card, IsScratched: true } : card
-        ),
-    })),
+    updateScratchStatus: (id) => {
+        persistScratchedId(id);
+        set((state) => ({
+            scratchCards: state.scratchCards.map(card =>
+                card.id === id ? { ...card, IsScratched: true } : card
+            ),
+        }));
+    },
 
     // Bank Data
     AllBankData: [],
