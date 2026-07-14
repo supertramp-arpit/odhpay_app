@@ -19,7 +19,6 @@ import {
     Landmark,
     ChevronRight,
     User,
-    Star,
     Lock,
     ShieldCheck,
     Info,
@@ -38,21 +37,11 @@ const UserProfileScreen = () => {
     const insets = useSafeAreaInsets();
     const [logoutModalVisible, setLogoutModalVisible] = useState(false);
     const [isLoadingLogout, setIsLoadingLogout] = useState(false);
-    const [isPrimeMember, setIsPrimeMember] = useState(false);
     const fadeAnim = useState(new Animated.Value(0))[0];
 
     // Get primary bank from store (real accounts via /payments/get_all_user_accounts)
     const banks = useBankStore((state) => state.banks);
     const primaryBank = banks.find(bank => bank.isPrimary) || banks[0] || null;
-
-    // Check Prime membership status when screen is focused
-    useFocusEffect(
-        React.useCallback(() => {
-            AsyncStorage.getItem('isPrimeMember')
-                .then((primeStatus) => setIsPrimeMember(primeStatus === 'true'))
-                .catch(() => { });
-        }, [])
-    );
 
     useEffect(() => {
         Animated.timing(fadeAnim, {
@@ -225,14 +214,7 @@ const UserProfileScreen = () => {
                 <Text style={styles.sectionLabel}>Account</Text>
                 <View style={styles.menuCard}>
                     <MenuRow icon={User} title="Personal Information" onPress={() => navigation.navigate("UserProfile")} />
-                    <MenuRow icon={Landmark} title="Bank Accounts" onPress={() => navigation.navigate("ManageBanksScreen")} />
-                    <MenuRow
-                        icon={Star}
-                        title={isPrimeMember ? "Prime Member" : "Prime Membership"}
-                        onPress={() => navigation.navigate("PrimeMembershipScreen")}
-                        badge={isPrimeMember ? "ACTIVE" : null}
-                        isLast
-                    />
+                    <MenuRow icon={Landmark} title="Bank Accounts" onPress={() => navigation.navigate("ManageBanksScreen")} isLast />
                 </View>
 
                 <Text style={styles.sectionLabel}>Security</Text>
