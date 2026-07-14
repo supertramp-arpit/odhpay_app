@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from "react";
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import { color } from '../../theme/tokens';
 import Theme from "../Theme";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -245,7 +246,7 @@ export default function Scan() {
                     styles.scanCorner,
                     cornerStyle[position],
                     {
-                        borderColor: '#00D4AA',
+                        borderColor: color.success,
                         opacity: glowAnimation,
                         transform: [{ scale: pulseAnimation }],
                     },
@@ -257,10 +258,10 @@ export default function Scan() {
     // Status indicator component
     const StatusIndicator = () => {
         const statusConfig = {
-            scanning: { icon: 'qrcode-scan', color: '#00D4AA', text: 'Scanning...' },
-            processing: { icon: 'loading', color: '#FFB800', text: 'Processing...' },
-            success: { icon: 'check-circle', color: '#00D4AA', text: 'Success!' },
-            error: { icon: 'alert-circle', color: '#FF4444', text: 'Try Again' },
+            scanning: { icon: 'qrcode-scan', color: color.success, text: 'Scanning...' },
+            processing: { icon: 'loading', color: color.warning, text: 'Processing...' },
+            success: { icon: 'check-circle', color: color.success, text: 'Success!' },
+            error: { icon: 'alert-circle', color: color.error, text: 'Try Again' },
         };
 
         const config = statusConfig[scanStatus];
@@ -298,12 +299,22 @@ export default function Scan() {
                         </View>
                     </TouchableOpacity>
                     <View style={styles.headerCenter}>
-                        <MaterialCommunityIcons name="qrcode-scan" size={24} color="#00D4AA" />
+                        <MaterialCommunityIcons name="qrcode-scan" size={24} color={color.success} />
                         <Text style={styles.headerText}>Scan & Pay</Text>
                     </View>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         style={styles.helpButton}
                         activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel="Scan and pay help"
+                        onPress={() =>
+                            Alert.alert(
+                                'How to Scan & Pay',
+                                'Point your camera at any UPI QR code, payment link QR, or an ODH Pay user’s QR. ' +
+                                'Payments to ODH Pay users are made from your wallet balance. ' +
+                                'Use the flash button in low light.'
+                            )
+                        }
                     >
                         <Feather name="help-circle" size={22} color="rgba(255,255,255,0.7)" />
                     </TouchableOpacity>
@@ -315,7 +326,7 @@ export default function Scan() {
                 // Loading permission status
                 <View style={styles.permissionContainer}>
                     <View style={styles.permissionCard}>
-                        <ActivityIndicator size="large" color="#00D4AA" />
+                        <ActivityIndicator size="large" color={color.white} />
                         <Text style={styles.permissionText}>Initializing camera...</Text>
                     </View>
                 </View>
@@ -324,43 +335,35 @@ export default function Scan() {
                 <View style={styles.permissionContainer}>
                     <View style={styles.permissionCard}>
                         <View style={styles.permissionIconContainer}>
-                            <MaterialCommunityIcons name="camera-off" size={48} color="#FF6B6B" />
+                            <MaterialCommunityIcons name="camera-off" size={44} color={color.error} />
                         </View>
-                        <Text style={styles.permissionTitle}>Camera Access Required</Text>
+                        <Text style={styles.permissionTitle}>Camera access needed</Text>
                         <Text style={styles.permissionSubtext}>
-                            To scan QR codes and make payments, please allow camera access
+                            {permission.canAskAgain
+                                ? 'To scan QR codes and pay, allow camera access.'
+                                : 'Camera access is turned off for ODH Pay. Enable it in your phone settings to scan and pay.'}
                         </Text>
                         {permission.canAskAgain ? (
-                            <TouchableOpacity 
-                                style={styles.permissionButton} 
+                            <TouchableOpacity
+                                style={styles.permissionButton}
                                 onPress={requestPermission}
-                                activeOpacity={0.8}
+                                activeOpacity={0.85}
+                                accessibilityRole="button"
+                                accessibilityLabel="Allow camera access"
                             >
-                                <LinearGradient
-                                    colors={['#00D4AA', '#00B894']}
-                                    style={styles.permissionButtonGradient}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 0 }}
-                                >
-                                    <MaterialCommunityIcons name="camera" size={20} color="#fff" />
-                                    <Text style={styles.permissionButtonText}>Allow Camera</Text>
-                                </LinearGradient>
+                                <MaterialCommunityIcons name="camera" size={20} color={color.ink900} />
+                                <Text style={styles.permissionButtonText}>Allow Camera</Text>
                             </TouchableOpacity>
                         ) : (
-                            <TouchableOpacity 
-                                style={styles.permissionButton} 
+                            <TouchableOpacity
+                                style={styles.permissionButton}
                                 onPress={() => Linking.openSettings()}
-                                activeOpacity={0.8}
+                                activeOpacity={0.85}
+                                accessibilityRole="button"
+                                accessibilityLabel="Open phone settings"
                             >
-                                <LinearGradient
-                                    colors={['#6C63FF', '#8B85FF']}
-                                    style={styles.permissionButtonGradient}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 0 }}
-                                >
-                                    <Feather name="settings" size={20} color="#fff" />
-                                    <Text style={styles.permissionButtonText}>Open Settings</Text>
-                                </LinearGradient>
+                                <Feather name="settings" size={20} color={color.ink900} />
+                                <Text style={styles.permissionButtonText}>Open Settings</Text>
                             </TouchableOpacity>
                         )}
                     </View>
@@ -404,7 +407,7 @@ export default function Scan() {
                                             ]}
                                         >
                                             <LinearGradient
-                                                colors={['transparent', '#00D4AA', 'transparent']}
+                                                colors={['transparent', color.success, 'transparent']}
                                                 start={{ x: 0, y: 0 }}
                                                 end={{ x: 1, y: 0 }}
                                                 style={styles.scanLineGradient}
@@ -424,7 +427,7 @@ export default function Scan() {
                         {loading && (
                             <View style={styles.loadingOverlay}>
                                 <BlurView intensity={20} style={styles.blurView}>
-                                    <ActivityIndicator size="large" color="#00D4AA" />
+                                    <ActivityIndicator size="large" color={color.white} />
                                     <Text style={styles.loadingText}>Processing...</Text>
                                 </BlurView>
                             </View>
@@ -478,30 +481,17 @@ export default function Scan() {
                                 <TouchableOpacity
                                     style={styles.scanAgainButton}
                                     onPress={resetScanner}
-                                    activeOpacity={0.8}
+                                    activeOpacity={0.85}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Scan again"
                                 >
-                                    <LinearGradient
-                                        colors={['#00D4AA', '#00B894']}
-                                        style={styles.scanAgainGradient}
-                                        start={{ x: 0, y: 0 }}
-                                        end={{ x: 1, y: 0 }}
-                                    >
-                                        <MaterialCommunityIcons name="qrcode-scan" size={22} color="#fff" />
-                                        <Text style={styles.scanAgainText}>Scan Again</Text>
-                                    </LinearGradient>
+                                    <MaterialCommunityIcons name="qrcode-scan" size={22} color="#0A0A0B" />
+                                    <Text style={styles.scanAgainText}>Scan Again</Text>
                                 </TouchableOpacity>
                             )}
-
-                            <TouchableOpacity
-                                style={styles.controlButton}
-                                onPress={() => {/* Add gallery picker */}}
-                                activeOpacity={0.7}
-                            >
-                                <View style={styles.controlButtonInner}>
-                                    <Ionicons name="images-outline" size={26} color="#fff" />
-                                </View>
-                                <Text style={styles.controlText}>Gallery</Text>
-                            </TouchableOpacity>
+                            {/* NOTE: the old "Gallery" button was a dead control
+                                (empty onPress) — removed until gallery QR scanning
+                                is actually implemented. */}
                         </View>
                     </LinearGradient>
                 </Animated.View>
@@ -596,7 +586,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         width: 40,
         height: 40,
-        borderColor: '#00D4AA',
+        borderColor: '#0E9F6E',
     },
     scanLine: {
         position: 'absolute',
@@ -652,9 +642,9 @@ const styles = StyleSheet.create({
     controls: {
         flexDirection: 'row',
         justifyContent: 'center',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         paddingHorizontal: 20,
-        gap: 40,
+        gap: 24,
     },
     controlButton: {
         alignItems: 'center',
@@ -684,18 +674,17 @@ const styles = StyleSheet.create({
         color: '#FFD700',
     },
     scanAgainButton: {
-        overflow: 'hidden',
-        borderRadius: 28,
-    },
-    scanAgainGradient: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 28,
         paddingHorizontal: 24,
-        paddingVertical: 16,
+        paddingVertical: 15,
         gap: 8,
     },
     scanAgainText: {
-        color: '#fff',
+        color: '#0A0A0B',
         fontSize: 16,
         fontWeight: '600',
     },
@@ -738,7 +727,7 @@ const styles = StyleSheet.create({
         width: 80,
         height: 80,
         borderRadius: 40,
-        backgroundColor: 'rgba(255,107,107,0.15)',
+        backgroundColor: 'rgba(229,72,77,0.16)',
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 20,
@@ -765,18 +754,16 @@ const styles = StyleSheet.create({
     },
     permissionButton: {
         width: '100%',
-        borderRadius: 16,
-        overflow: 'hidden',
-    },
-    permissionButtonGradient: {
+        borderRadius: 14,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 16,
+        minHeight: 52,
         gap: 10,
+        backgroundColor: '#FFFFFF',
     },
     permissionButtonText: {
-        color: '#fff',
+        color: '#0A0A0B',
         fontSize: 16,
         fontWeight: '600',
     },

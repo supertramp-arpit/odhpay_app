@@ -207,7 +207,7 @@ const ReferralCode = () => {
 
       {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
-      <TouchableOpacity onPress={() => Alert.alert('How to get referral ID', 'Ask the person who referred you for their Member ID (e.g., ODHP12345678 or LCR00000001). It is found under their profile in the app.')}
+      <TouchableOpacity onPress={() => Alert.alert('How to get referral ID', 'Ask the person who referred you for their Member ID (e.g., ODHP12345678). It is found under their profile in the app.')}
         style={{ marginTop: 4, marginBottom: 10 }}>
         <Text style={{ color: Theme.colors.primary, fontSize: 13 }}>How do I get a referral ID?</Text>
       </TouchableOpacity>
