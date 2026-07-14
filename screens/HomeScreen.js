@@ -15,6 +15,7 @@ import {
   Linking,
 } from "react-native";
 import { MaterialIcons, Ionicons, FontAwesome5 } from "@expo/vector-icons";
+import { Bell } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
@@ -303,12 +304,10 @@ const HomeScreen = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [bannerImages, setBannerImages] = useState(images);
 
-  // Pin the hero in place while the white sheet scrolls up over it
-  const heroTranslate = heroScrollY.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-    extrapolateLeft: "clamp",
-  });
+  // NOTE: the hero used to be "pinned" with a translateY driven by scroll
+  // (native driver). That desynced the header buttons' touch areas from where
+  // they were drawn once the user scrolled — taps on search/rewards did
+  // nothing. The hero now scrolls naturally so touch and visuals always align.
 
   useEffect(() => {
     const listener = scrollX.addListener(({ value }) => {
@@ -677,7 +676,7 @@ const HomeScreen = () => {
           { useNativeDriver: true }
         )}
       >
-      <Animated.View style={{ transform: [{ translateY: heroTranslate }], zIndex: 0 }}>
+      <Animated.View style={{ zIndex: 0 }}>
       <LinearGradient
         colors={["#000000", "#000000"]}
         start={{ x: 0, y: 0 }}
@@ -699,14 +698,14 @@ const HomeScreen = () => {
         <View style={styles.heroTopBar}>
           <View style={styles.heroTopLeft}>
             <TouchableOpacity
-              onPress={() => navigation.navigate("NotificationScreen")}
+              onPress={() => navigation.navigate("UserProfileScreen")}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Your profile"
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
               <View style={styles.avatarWrap}>
                 <Image source={profileSource} style={styles.avatarImg} />
-                <View style={styles.notifBadge}>
-                  <Text style={styles.notifBadgeText}>+9</Text>
-                </View>
               </View>
             </TouchableOpacity>
             <View style={{ marginLeft: 10, flexShrink: 1 }}>
@@ -733,8 +732,21 @@ const HomeScreen = () => {
           <View style={styles.heroTopRight}>
             <TouchableOpacity
               style={styles.heroIconBtn}
+              onPress={() => navigation.navigate("NotificationScreen")}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Notifications"
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Bell size={18} color="#FFFFFF" strokeWidth={2} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.heroIconBtn}
               onPress={() => navigation.navigate("AllServicesScreen")}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Search services"
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
               <Ionicons name="search" size={20} color="#FFFFFF" />
             </TouchableOpacity>
@@ -742,6 +754,9 @@ const HomeScreen = () => {
               style={styles.heroIconBtn}
               onPress={() => navigation.navigate("ScratchCardScreen")}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Rewards"
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
               <FontAwesome5 name="trophy" size={17} color="#FFD54A" />
             </TouchableOpacity>
