@@ -15,6 +15,7 @@ import {
     StatusBar,
 } from "react-native";
 import { MaterialIcons, Ionicons, Feather } from "@expo/vector-icons";
+import QRCode from "react-native-qrcode-svg";
 import { CommonActions, useNavigation, useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -74,7 +75,7 @@ const UserProfileScreen = () => {
         }).start();
     }, []);
 
-    // Fetch user data with TTL
+    // Fetch user data with TTL + the user's real bank accounts
     useFocusEffect(
         React.useCallback(() => {
             const { user: storeUser, updatedAt } = useUserStore.getState();
@@ -82,6 +83,7 @@ const UserProfileScreen = () => {
             if (!storeUser || Date.now() - (updatedAt || 0) > ttlMs) {
                 useUserStore.getState().fetchUser().catch(() => { });
             }
+            useBankStore.getState().fetchBanks?.();
         }, [])
     );
 
@@ -214,25 +216,15 @@ const UserProfileScreen = () => {
                         onPress={() => navigation.navigate("ManageBanksScreen")}
                     >
                         <View style={styles.primaryBankLeft}>
-                            {primaryBank ? (
-                                <View style={[styles.bankLogoContainer, { backgroundColor: primaryBank.bankColor + '15' }]}>
-                                    <Image 
-                                        source={{ uri: primaryBank.bankLogo }}
-                                        style={styles.bankLogoImage}
-                                        resizeMode="contain"
-                                    />
-                                </View>
-                            ) : (
-                                <View style={styles.bankLogoPlaceholder}>
-                                    <MaterialIcons name="account-balance" size={22} color="#9CA3AF" />
-                                </View>
-                            )}
+                            <View style={styles.bankLogoPlaceholder}>
+                                <MaterialIcons name="account-balance" size={22} color="#6B7280" />
+                            </View>
                             <View style={styles.primaryBankInfo}>
                                 <Text style={styles.primaryBankName}>
                                     {primaryBank ? primaryBank.bankName : 'Add Bank Account'}
                                 </Text>
                                 <Text style={styles.primaryBankUpi}>
-                                    {primaryBank ? primaryBank.upiId : 'Tap to add your bank'}
+                                    {primaryBank ? primaryBank.accountNumber : 'Tap to add your bank'}
                                 </Text>
                             </View>
                         </View>
@@ -246,15 +238,19 @@ const UserProfileScreen = () => {
                         </View>
                     </TouchableOpacity>
 
+                    {/* Rendered locally — the previous version sent the user's
+                        phone number to a third-party QR service (quickchart.io).
+                        A bare 10-digit number is the format the in-app scanner
+                        pays to (wallet P2P). */}
                     <View style={styles.qrWrapper}>
-                        <Image
-                            source={{
-                                uri: `https://quickchart.io/qr?size=200&text=${encodeURIComponent(qrText)}&margin=1`,
-                            }}
-                            style={styles.qrCode}
-                            resizeMode="contain"
+                        <QRCode
+                            value={qrText}
+                            size={200}
+                            color="#0A0A0B"
+                            backgroundColor="#FFFFFF"
                         />
                     </View>
+                    <Text style={styles.qrName}>{primaryName}</Text>
                     <Text style={styles.qrHint}>Scan to pay me</Text>
                 </View>
 
@@ -520,10 +516,16 @@ const styles = StyleSheet.create({
         width: 180,
         height: 180,
     },
+    qrName: {
+        fontSize: 16,
+        color: '#0A0A0B',
+        marginTop: 16,
+        fontWeight: '600',
+    },
     qrHint: {
         fontSize: 14,
         color: '#6B7280',
-        marginTop: 16,
+        marginTop: 2,
         fontWeight: '500',
     },
 

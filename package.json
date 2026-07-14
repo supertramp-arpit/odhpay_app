@@ -74,6 +74,7 @@
     "react-native-share": "^12.2.1",
     "react-native-sms-retriever": "^1.1.1",
     "react-native-snap-carousel": "^3.9.1",
+    "react-native-qrcode-svg": "^6.3.2",
     "react-native-svg": "15.12.1",
     "react-native-vector-icons": "^10.3.0",
     "react-native-view-shot": "4.0.3",
