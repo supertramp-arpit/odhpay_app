@@ -18,7 +18,9 @@ import { useNavigation } from "@react-navigation/native";
 import * as Clipboard from "expo-clipboard";
 import { Feather, MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { TrendingUp } from "lucide-react-native";
 import Theme from "./Theme";
+import { color, space, radius, type, tabularNums } from "../theme/tokens";
 import { useWalletStore, useUserStore } from "../store";
 import { ActivityIndicator } from "react-native";
 
@@ -309,6 +311,26 @@ const Wallet = () => {
           </View>
         </View>
 
+        {/* Investment */}
+        <TouchableOpacity
+          style={styles.investCard}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate("ProjectInvestment")}
+          accessibilityRole="button"
+          accessibilityLabel="Investment. ODH Pay project, 7.5 percent per annum. Open project investment"
+        >
+          <View style={styles.investIcon}>
+            <TrendingUp size={22} color={color.textInverse} strokeWidth={1.8} />
+          </View>
+          <View style={styles.investBody}>
+            <Text style={styles.investTitle}>Investment</Text>
+            <Text style={styles.investSub}>ODH Pay project • 7.5% p.a.</Text>
+          </View>
+          <View style={styles.investPill}>
+            <Text style={styles.investPillText}>Invest</Text>
+          </View>
+        </TouchableOpacity>
+
         {/* Transactions */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -520,6 +542,49 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: Theme.colors.textSecondary,
     textAlign: "center",
+  },
+
+  // Investment entry
+  investCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: color.ink900,
+    borderRadius: radius.lg,
+    padding: space.base,
+    marginBottom: 16,
+    gap: space.md,
+    minHeight: 72,
+  },
+  investIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: color.ink700,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  investBody: {
+    flex: 1,
+  },
+  investTitle: {
+    ...type.h3,
+    color: color.textInverse,
+  },
+  investSub: {
+    ...type.caption,
+    ...tabularNums,
+    color: color.gray400,
+    marginTop: 2,
+  },
+  investPill: {
+    paddingHorizontal: space.base,
+    paddingVertical: space.sm,
+    borderRadius: radius.pill,
+    backgroundColor: color.white,
+  },
+  investPillText: {
+    ...type.buttonSm,
+    color: color.ink900,
   },
 
   // Filters
