@@ -234,6 +234,10 @@ const Wallet = () => {
   const [activeFilter, setActiveFilter] = useState("all");
   const [walletBalance, setWalletBalance] = useState(null);
   const [hideBalance, setHideBalance] = useState(false);
+  // Explicit pixel size for the banner art — images sized purely by absolute
+  // insets don't render on this RN/New-Arch setup (every working image in the
+  // app uses concrete width/height).
+  const [bannerSize, setBannerSize] = useState(null);
 
   const navigation = useNavigation();
   const { transactionHistory, fetchWalletHistory, initiateTopup, fetchBalance, loading } = useWalletStore();
@@ -364,15 +368,27 @@ const Wallet = () => {
           style={styles.investBanner}
           activeOpacity={0.85}
           onPress={() => navigation.navigate("ProjectInvestment")}
+          onLayout={(e) => {
+            const { width: w, height: h } = e.nativeEvent.layout;
+            setBannerSize({ w: Math.ceil(w), h: Math.ceil(h) });
+          }}
           accessibilityRole="button"
           accessibilityLabel="Project Investment. Grow at 7.5 percent per annum, starting from ten thousand rupees. Open"
         >
-          <Image
-            source={require("../assets/invest_banner_emerald.png")}
-            style={styles.investArt}
-            resizeMode="cover"
-            accessible={false}
-          />
+          {bannerSize && (
+            <Image
+              source={require("../assets/invest_banner_emerald.png")}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: bannerSize.w,
+                height: bannerSize.h,
+              }}
+              resizeMode="cover"
+              accessible={false}
+            />
+          )}
           <View style={styles.investBody}>
             <Text style={styles.investKicker}>Project Investment</Text>
             <Text style={styles.investTitle}>Grow at 7.5% p.a.</Text>
@@ -647,9 +663,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     minHeight: 132,
     overflow: "hidden",
-  },
-  investArt: {
-    ...StyleSheet.absoluteFillObject,
   },
   investBody: {
     width: "58%",
