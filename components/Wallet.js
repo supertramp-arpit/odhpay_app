@@ -373,16 +373,13 @@ const Wallet = () => {
             resizeMode="cover"
             accessible={false}
           />
-          <View style={styles.investIcon}>
-            <TrendingUp size={20} color={color.textInverse} strokeWidth={1.8} />
-          </View>
           <View style={styles.investBody}>
             <Text style={styles.investKicker}>Project Investment</Text>
             <Text style={styles.investTitle}>Grow at 7.5% p.a.</Text>
             <Text style={styles.investSub}>ODH Pay project • from ₹10,000</Text>
-          </View>
-          <View style={styles.investPill}>
-            <Text style={styles.investPillText}>Invest</Text>
+            <View style={styles.investPill}>
+              <Text style={styles.investPillText}>Invest</Text>
+            </View>
           </View>
         </TouchableOpacity>
 
@@ -640,31 +637,24 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // Investment banner
+  // Investment banner — text column left, generated art fills the right zone
   investBanner: {
-    flexDirection: "row",
-    alignItems: "center",
     backgroundColor: color.ink900,
     borderRadius: radius.lg,
-    padding: space.base,
+    padding: space.lg,
     marginBottom: 16,
-    gap: space.md,
-    minHeight: 88,
+    minHeight: 132,
     overflow: "hidden",
   },
   investArt: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  investIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    backgroundColor: color.ink700,
-    alignItems: "center",
-    justifyContent: "center",
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: "48%",
   },
   investBody: {
-    flex: 1,
+    width: "58%",
   },
   investKicker: {
     ...type.micro,
@@ -676,19 +666,22 @@ const styles = StyleSheet.create({
     ...type.h3,
     ...tabularNums,
     color: color.textInverse,
-    marginTop: 2,
+    marginTop: space.xs,
   },
   investSub: {
     ...type.caption,
     ...tabularNums,
     color: color.gray400,
-    marginTop: 2,
+    marginTop: space.xxs,
   },
   investPill: {
-    paddingHorizontal: space.base,
-    paddingVertical: space.sm,
+    alignSelf: "flex-start",
+    minHeight: 36,
+    justifyContent: "center",
+    paddingHorizontal: space.lg,
     borderRadius: radius.pill,
     backgroundColor: color.white,
+    marginTop: space.md,
   },
   investPillText: {
     ...type.buttonSm,
