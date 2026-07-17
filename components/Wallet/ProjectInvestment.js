@@ -23,7 +23,6 @@ import {
   View,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 import {
   BadgeCheck,
@@ -366,7 +365,6 @@ const SelectRow = ({ label, value, onPress }) => (
 
 const ProjectInvestment = () => {
   const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
 
   const [amount, setAmount] = useState(MIN_AMOUNT);
   const [amountText, setAmountText] = useState(String(MIN_AMOUNT));
@@ -421,8 +419,8 @@ const ProjectInvestment = () => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={color.ink900} />
 
-      {/* Ink hero */}
-      <View style={[styles.hero, { paddingTop: insets.top + space.md }]}>
+      {/* Ink hero — the app's root SafeAreaView already consumes the status-bar inset */}
+      <View style={[styles.hero, { paddingTop: space.md }]}>
         <View style={styles.heroNav}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -456,7 +454,7 @@ const ProjectInvestment = () => {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 + insets.bottom }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -592,7 +590,7 @@ const ProjectInvestment = () => {
       </ScrollView>
 
       {/* Sticky CTA */}
-      <View style={[styles.ctaBar, { paddingBottom: Math.max(insets.bottom, space.base) }]}>
+      <View style={[styles.ctaBar, { paddingBottom: space.base }]}>
         <TouchableOpacity
           style={[styles.ctaButton, !amountValid && styles.ctaButtonDisabled]}
           onPress={() => {
