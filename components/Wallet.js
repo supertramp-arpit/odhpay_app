@@ -15,6 +15,7 @@ import {
   StatusBar,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import Svg, { Path } from "react-native-svg";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -287,7 +288,7 @@ const Wallet = () => {
     { icon: Phone, label: "To Mobile", sublabel: "Number", screen: "ToMobile" },
     { icon: Landmark, label: "To Bank", sublabel: "UPI ID", screen: "ToBank" },
     { icon: UserRound, label: "To Self", sublabel: "Account", screen: "ToSelf" },
-    { icon: WalletIcon, label: "Balance", sublabel: "Check", screen: "CheckWalletBalance" },
+    { icon: TrendingUp, label: "Investment", sublabel: "7.5% p.a.", screen: "ProjectInvestment" },
   ];
 
   return (
@@ -358,6 +359,49 @@ const Wallet = () => {
           </View>
         </View>
 
+        {/* Investment banner */}
+        <TouchableOpacity
+          style={styles.investBanner}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate("ProjectInvestment")}
+          accessibilityRole="button"
+          accessibilityLabel="Project Investment. Grow at 7.5 percent per annum, starting from ten thousand rupees. Open"
+        >
+          <Svg
+            style={styles.investCurve}
+            width="100%"
+            height={56}
+            viewBox="0 0 320 56"
+            preserveAspectRatio="none"
+            pointerEvents="none"
+            aria-hidden
+          >
+            <Path
+              d="M0,52 C80,50 160,40 224,26 C264,17 296,8 320,2 L320,56 L0,56 Z"
+              fill={color.white}
+              opacity={0.05}
+            />
+            <Path
+              d="M0,52 C80,50 160,40 224,26 C264,17 296,8 320,2"
+              stroke={color.white}
+              strokeWidth={1.5}
+              opacity={0.25}
+              fill="none"
+            />
+          </Svg>
+          <View style={styles.investIcon}>
+            <TrendingUp size={20} color={color.textInverse} strokeWidth={1.8} />
+          </View>
+          <View style={styles.investBody}>
+            <Text style={styles.investKicker}>Project Investment</Text>
+            <Text style={styles.investTitle}>Grow at 7.5% p.a.</Text>
+            <Text style={styles.investSub}>ODH Pay project • from ₹10,000</Text>
+          </View>
+          <View style={styles.investPill}>
+            <Text style={styles.investPillText}>Invest</Text>
+          </View>
+        </TouchableOpacity>
+
         {/* Quick Actions */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -374,26 +418,6 @@ const Wallet = () => {
             ))}
           </View>
         </View>
-
-        {/* Investment */}
-        <TouchableOpacity
-          style={styles.investCard}
-          activeOpacity={0.85}
-          onPress={() => navigation.navigate("ProjectInvestment")}
-          accessibilityRole="button"
-          accessibilityLabel="Investment. ODH Pay project, 7.5 percent per annum. Open project investment"
-        >
-          <View style={styles.investIcon}>
-            <TrendingUp size={22} color={color.textInverse} strokeWidth={1.8} />
-          </View>
-          <View style={styles.investBody}>
-            <Text style={styles.investTitle}>Investment</Text>
-            <Text style={styles.investSub}>ODH Pay project • 7.5% p.a.</Text>
-          </View>
-          <View style={styles.investPill}>
-            <Text style={styles.investPillText}>Invest</Text>
-          </View>
-        </TouchableOpacity>
 
         {/* Transactions */}
         <View style={styles.section}>
@@ -632,8 +656,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // Investment entry
-  investCard: {
+  // Investment banner
+  investBanner: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: color.ink900,
@@ -641,7 +665,14 @@ const styles = StyleSheet.create({
     padding: space.base,
     marginBottom: 16,
     gap: space.md,
-    minHeight: 72,
+    minHeight: 88,
+    overflow: "hidden",
+  },
+  investCurve: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   investIcon: {
     width: 44,
@@ -654,9 +685,17 @@ const styles = StyleSheet.create({
   investBody: {
     flex: 1,
   },
+  investKicker: {
+    ...type.micro,
+    color: color.gray500,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
   investTitle: {
     ...type.h3,
+    ...tabularNums,
     color: color.textInverse,
+    marginTop: 2,
   },
   investSub: {
     ...type.caption,
