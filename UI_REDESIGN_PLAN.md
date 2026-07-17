@@ -130,7 +130,9 @@ Signature 5 · Accessibility 2 · Technical 3 = **30/100**.
 
 ### 2.3 Wallet cluster
 - [ ] `screens/Security/CheckWalletBalance.js` — **remove `#6C63FF` ×2 (:131,:243 — only live instances in app)**; debit red `#FF8B8B` (:433,445) → ink; keep mask toggle; calm the glass/gradient/shadow stack
-- [ ] `components/Wallet.js` — debit red :84 → ink; txn `.map` in ScrollView :345 → FlatList; `AmountText`
+- [x] `components/Wallet.js` — **regraded 2026-07-17**: debit → ink, lucide-only, tabular `formatINR` money,
+      maskable balance (eye toggle), ink primary CTA, paper ground, skeleton loading, empty-state action,
+      a11y labels. *Remaining:* txn `.map` in ScrollView → FlatList (structural, do with pagination rework)
 - [ ] `components/Wallet/odhMoney.js` / `odhRupees.js` — replace DUMMY_ data, debit-red → ink, `.map`→FlatList, rogue stat colors → mono
 
 ### 2.4 HistoryScreen polish (bones already good: skeleton + empty + pagination)

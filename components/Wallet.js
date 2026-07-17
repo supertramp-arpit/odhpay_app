@@ -15,19 +15,42 @@ import {
   StatusBar,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import * as Clipboard from "expo-clipboard";
-import { Feather, MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { TrendingUp } from "lucide-react-native";
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  AtSign,
+  Award,
+  Eye,
+  EyeOff,
+  Inbox,
+  Landmark,
+  Lock,
+  Phone,
+  Plus,
+  Send,
+  TrendingUp,
+  UserRound,
+  Wallet as WalletIcon,
+  X,
+} from "lucide-react-native";
 import Theme from "./Theme";
-import { color, space, radius, type, tabularNums } from "../theme/tokens";
+import {
+  color,
+  space,
+  radius,
+  type,
+  tabularNums,
+  elevation,
+  hitSlop8,
+} from "../theme/tokens";
+import { formatINR } from "../utils/helper";
 import { useWalletStore, useUserStore } from "../store";
 import { ActivityIndicator } from "react-native";
 
 const { width, height } = Dimensions.get("window");
 
 // Quick Action Button - Consistent black theme
-const QuickActionButton = ({ icon, label, sublabel, onPress, delay = 0 }) => {
+const QuickActionButton = ({ icon: Icon, label, sublabel, onPress, delay = 0 }) => {
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
@@ -39,10 +62,15 @@ const QuickActionButton = ({ icon, label, sublabel, onPress, delay = 0 }) => {
   }, []);
 
   return (
-    <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}, ${sublabel}`}
+    >
       <Animated.View style={[styles.quickActionBtn, { opacity: opacityAnim, transform: [{ scale: scaleAnim }] }]}>
         <View style={styles.quickActionIcon}>
-          <Ionicons name={icon} size={24} color="#fff" />
+          <Icon size={22} color={color.textInverse} strokeWidth={1.8} />
         </View>
         <Text style={styles.quickActionLabel}>{label}</Text>
         <Text style={styles.quickActionSub}>{sublabel}</Text>
@@ -75,16 +103,21 @@ const TransactionItem = ({ transaction, index }) => {
 
   return (
     <Animated.View style={[styles.txnItem, { opacity: opacityAnim, transform: [{ translateY: slideAnim }] }]}>
-      <View style={[styles.txnIcon, { backgroundColor: isCredit ? "#E8F5E9" : "#FFEBEE" }]}>
-        <Feather name={isCredit ? "arrow-down-left" : "arrow-up-right"} size={18} color={isCredit ? Theme.colors.success : Theme.colors.danger} />
+      {/* Debit is ink, never red — red is reserved for failed status */}
+      <View style={[styles.txnIcon, { backgroundColor: isCredit ? color.successBg : color.gray150 }]}>
+        {isCredit ? (
+          <ArrowDownLeft size={18} color={color.successFg} strokeWidth={1.8} />
+        ) : (
+          <ArrowUpRight size={18} color={color.text} strokeWidth={1.8} />
+        )}
       </View>
       <View style={styles.txnDetails}>
         <Text style={styles.txnTitle} numberOfLines={1}>{transaction.purpose || (isCredit ? "Money Added" : "Payment")}</Text>
         <Text style={styles.txnDate}>{formatDate(transaction.transaction_date)} • {formatTime(transaction.transaction_date)}</Text>
       </View>
       <View style={styles.txnRight}>
-        <Text style={[styles.txnAmount, { color: isCredit ? Theme.colors.success : Theme.colors.danger }]}>
-          {isCredit ? "+" : "-"}₹{parseFloat(transaction.amount).toFixed(2)}
+        <Text style={[styles.txnAmount, { color: isCredit ? color.successFg : color.text }]}>
+          {isCredit ? "+" : "−"}{formatINR(transaction.amount)}
         </Text>
         <View style={[styles.txnStatus, { backgroundColor: `${statusColor}15` }]}>
           <View style={[styles.txnDot, { backgroundColor: statusColor }]} />
@@ -118,8 +151,14 @@ const AddMoneyModal = ({ visible, onClose, onSubmit, loading }) => {
 
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Add Money</Text>
-            <TouchableOpacity onPress={onClose} style={styles.modalClose}>
-              <Feather name="x" size={22} color={Theme.colors.text} />
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.modalClose}
+              hitSlop={hitSlop8}
+              accessibilityRole="button"
+              accessibilityLabel="Close add money"
+            >
+              <X size={22} color={color.text} />
             </TouchableOpacity>
           </View>
 
@@ -153,7 +192,7 @@ const AddMoneyModal = ({ visible, onClose, onSubmit, loading }) => {
           <View style={styles.upiInputWrap}>
             <Text style={styles.upiLabel}>Your UPI ID</Text>
             <View style={styles.upiInputBox}>
-              <Feather name="at-sign" size={18} color={Theme.colors.textSecondary} />
+              <AtSign size={18} color={color.textSecondary} strokeWidth={1.8} />
               <TextInput
                 style={styles.upiInput}
                 placeholder="yourname@upi"
@@ -178,7 +217,7 @@ const AddMoneyModal = ({ visible, onClose, onSubmit, loading }) => {
           </TouchableOpacity>
 
           <View style={styles.secureNote}>
-            <Feather name="lock" size={12} color={Theme.colors.textSecondary} />
+            <Lock size={12} color={color.textSecondary} strokeWidth={1.8} />
             <Text style={styles.secureNoteText}>Secured with 256-bit encryption</Text>
           </View>
         </View>
@@ -193,6 +232,7 @@ const Wallet = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState("all");
   const [walletBalance, setWalletBalance] = useState(null);
+  const [hideBalance, setHideBalance] = useState(false);
 
   const navigation = useNavigation();
   const { transactionHistory, fetchWalletHistory, initiateTopup, fetchBalance, loading } = useWalletStore();
@@ -244,10 +284,10 @@ const Wallet = () => {
   const transactions = transactionHistory?.transactions || [];
 
   const quickActions = [
-    { icon: "call-outline", label: "To Mobile", sublabel: "Number", screen: "ToMobile" },
-    { icon: "card-outline", label: "To Bank", sublabel: "UPI ID", screen: "ToBank" },
-    { icon: "person-outline", label: "To Self", sublabel: "Account", screen: "ToSelf" },
-    { icon: "wallet-outline", label: "Balance", sublabel: "Check", screen: "CheckWalletBalance" },
+    { icon: Phone, label: "To Mobile", sublabel: "Number", screen: "ToMobile" },
+    { icon: Landmark, label: "To Bank", sublabel: "UPI ID", screen: "ToBank" },
+    { icon: UserRound, label: "To Self", sublabel: "Account", screen: "ToSelf" },
+    { icon: WalletIcon, label: "Balance", sublabel: "Check", screen: "CheckWalletBalance" },
   ];
 
   return (
@@ -258,37 +298,61 @@ const Wallet = () => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={color.text} />}
       >
         {/* Balance Card */}
         <View style={styles.balanceCard}>
           <View style={styles.balanceHeader}>
             <View style={styles.walletIconWrap}>
-              <MaterialCommunityIcons name="wallet" size={24} color="#fff" />
+              <WalletIcon size={20} color={color.textInverse} strokeWidth={1.8} />
             </View>
             <Text style={styles.balanceLabel}>Available Balance</Text>
+            <TouchableOpacity
+              onPress={() => setHideBalance((v) => !v)}
+              hitSlop={hitSlop8}
+              accessibilityRole="button"
+              accessibilityLabel={hideBalance ? "Show balance" : "Hide balance"}
+            >
+              {hideBalance ? (
+                <EyeOff size={18} color={color.textSecondary} strokeWidth={1.8} />
+              ) : (
+                <Eye size={18} color={color.textSecondary} strokeWidth={1.8} />
+              )}
+            </TouchableOpacity>
           </View>
 
-          <Text style={styles.balanceAmount}>
-            ₹{balance.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <Text style={styles.balanceAmount} accessibilityLabel={hideBalance ? "Balance hidden" : `Balance ${formatINR(balance)}`}>
+            {hideBalance ? "₹ ••••••" : formatINR(balance)}
           </Text>
 
           {odhMoney > 0 && (
             <View style={styles.odhMoneyPill}>
-              <Feather name="award" size={14} color={Theme.colors.success} />
+              <Award size={14} color={color.successFg} strokeWidth={1.8} />
               <Text style={styles.odhMoneyText}>ODH Money</Text>
-              <Text style={styles.odhMoneyValue}>₹{odhMoney.toFixed(2)}</Text>
+              <Text style={styles.odhMoneyValue}>{hideBalance ? "₹ ••••" : formatINR(odhMoney)}</Text>
             </View>
           )}
 
           <View style={styles.actionBtns}>
-            <TouchableOpacity style={styles.addMoneyBtn} onPress={() => setShowAddModal(true)} activeOpacity={0.8}>
-              <Feather name="plus" size={20} color={Theme.colors.primary} />
+            <TouchableOpacity
+              style={styles.addMoneyBtn}
+              onPress={() => setShowAddModal(true)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Add money to wallet"
+            >
+              <Plus size={18} color={color.textInverse} strokeWidth={2} />
               <Text style={styles.addMoneyText}>Add Money</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.withdrawBtn} onPress={() => navigation.navigate("ToBank")} activeOpacity={0.8}>
-              <Feather name="send" size={18} color="#fff" />
+            <TouchableOpacity
+              style={styles.withdrawBtn}
+              onPress={() => navigation.navigate("ToBank")}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Withdraw to bank"
+            >
+              <Send size={16} color={color.text} strokeWidth={1.8} />
               <Text style={styles.withdrawText}>Withdraw</Text>
             </TouchableOpacity>
           </View>
@@ -353,14 +417,31 @@ const Wallet = () => {
           </View>
 
           {loading && !refreshing ? (
-            <View style={styles.loadingWrap}>
-              <ActivityIndicator size="large" color={Theme.colors.primary} />
+            <View style={styles.txnList}>
+              {[0, 1, 2].map((i) => (
+                <View key={i} style={styles.skeletonRow}>
+                  <View style={styles.skeletonIcon} />
+                  <View style={styles.skeletonBody}>
+                    <View style={styles.skeletonLine} />
+                    <View style={styles.skeletonLineShort} />
+                  </View>
+                  <View style={styles.skeletonAmount} />
+                </View>
+              ))}
             </View>
           ) : transactions.length === 0 ? (
             <View style={styles.emptyState}>
-              <Feather name="inbox" size={40} color={Theme.colors.textLight} />
-              <Text style={styles.emptyTitle}>No Transactions</Text>
-              <Text style={styles.emptySub}>Your activity will appear here</Text>
+              <Inbox size={36} color={color.textTertiary} strokeWidth={1.5} />
+              <Text style={styles.emptyTitle}>No transactions yet</Text>
+              <Text style={styles.emptySub}>Add money to get started</Text>
+              <TouchableOpacity
+                style={styles.emptyAction}
+                onPress={() => setShowAddModal(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Add money"
+              >
+                <Text style={styles.emptyActionText}>Add Money</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             <View style={styles.txnList}>
@@ -387,7 +468,7 @@ const Wallet = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Theme.colors.primary,
+    backgroundColor: color.background,
   },
   scrollView: {
     flex: 1,
@@ -399,11 +480,13 @@ const styles = StyleSheet.create({
 
   // Balance Card
   balanceCard: {
-    backgroundColor: Theme.colors.surface,
-    borderRadius: 20,
-    padding: 20,
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
+    padding: space.lg,
     marginBottom: 16,
-    ...Theme.shadows.md,
+    borderWidth: 1,
+    borderColor: color.border,
+    ...elevation.level1,
   },
   balanceHeader: {
     flexDirection: "row",
@@ -411,29 +494,29 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   walletIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: Theme.colors.primary,
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: color.ink900,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
   },
   balanceLabel: {
-    fontSize: 14,
-    color: Theme.colors.textSecondary,
+    ...type.bodySm,
+    color: color.textSecondary,
+    flex: 1,
   },
   balanceAmount: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: Theme.colors.text,
+    ...type.display,
+    ...tabularNums,
+    color: color.text,
     marginBottom: 12,
-    letterSpacing: -0.5,
   },
   odhMoneyPill: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: `${Theme.colors.success}10`,
+    backgroundColor: color.successBg,
     alignSelf: "flex-start",
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -448,7 +531,8 @@ const styles = StyleSheet.create({
   odhMoneyValue: {
     fontSize: 13,
     fontWeight: "700",
-    color: Theme.colors.success,
+    ...tabularNums,
+    color: color.successFg,
   },
   actionBtns: {
     flexDirection: "row",
@@ -459,39 +543,43 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#E8F5E9",
-    borderRadius: 12,
+    backgroundColor: color.ink900,
+    borderRadius: radius.md,
     paddingVertical: 14,
     gap: 8,
   },
   addMoneyText: {
+    ...type.buttonSm,
     fontSize: 15,
-    fontWeight: "600",
-    color: Theme.colors.primary,
+    color: color.textInverse,
   },
   withdrawBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: Theme.colors.primary,
-    borderRadius: 12,
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.borderStrong,
+    borderRadius: radius.md,
     paddingVertical: 14,
     gap: 8,
   },
   withdrawText: {
+    ...type.buttonSm,
     fontSize: 15,
-    fontWeight: "600",
-    color: "#fff",
+    color: color.text,
   },
 
   // Sections
   section: {
-    backgroundColor: Theme.colors.surface,
-    borderRadius: 20,
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
     padding: 16,
     marginBottom: 16,
-    ...Theme.shadows.sm,
+    borderWidth: 1,
+    borderColor: color.border,
+    ...elevation.level1,
   },
   sectionHeader: {
     flexDirection: "row",
@@ -526,8 +614,8 @@ const styles = StyleSheet.create({
   quickActionIcon: {
     width: 52,
     height: 52,
-    borderRadius: 16,
-    backgroundColor: Theme.colors.primary,
+    borderRadius: radius.lg,
+    backgroundColor: color.ink900,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
@@ -649,6 +737,7 @@ const styles = StyleSheet.create({
   txnAmount: {
     fontSize: 14,
     fontWeight: "700",
+    ...tabularNums,
     marginBottom: 4,
   },
   txnStatus: {
@@ -670,10 +759,42 @@ const styles = StyleSheet.create({
     textTransform: "capitalize",
   },
 
-  // Loading & Empty
-  loadingWrap: {
-    paddingVertical: 40,
+  // Loading skeleton & Empty
+  skeletonRow: {
+    flexDirection: "row",
     alignItems: "center",
+    backgroundColor: color.surfaceMuted,
+    borderRadius: radius.md,
+    padding: 12,
+  },
+  skeletonIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: color.gray200,
+    marginRight: 12,
+  },
+  skeletonBody: {
+    flex: 1,
+  },
+  skeletonLine: {
+    height: 12,
+    width: "70%",
+    borderRadius: radius.xs,
+    backgroundColor: color.gray200,
+    marginBottom: 8,
+  },
+  skeletonLineShort: {
+    height: 10,
+    width: "45%",
+    borderRadius: radius.xs,
+    backgroundColor: color.gray150,
+  },
+  skeletonAmount: {
+    height: 12,
+    width: 56,
+    borderRadius: radius.xs,
+    backgroundColor: color.gray200,
   },
   emptyState: {
     alignItems: "center",
@@ -682,13 +803,26 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 15,
     fontWeight: "600",
-    color: Theme.colors.text,
+    color: color.text,
     marginTop: 12,
   },
   emptySub: {
     fontSize: 13,
-    color: Theme.colors.textSecondary,
+    color: color.textSecondary,
     marginTop: 4,
+  },
+  emptyAction: {
+    marginTop: 16,
+    minHeight: 44,
+    paddingHorizontal: space.xl,
+    borderRadius: radius.pill,
+    backgroundColor: color.ink900,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyActionText: {
+    ...type.buttonSm,
+    color: color.textInverse,
   },
 
   // Modal
