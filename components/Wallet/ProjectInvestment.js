@@ -430,27 +430,6 @@ const ProjectInvestment = () => {
 
       {/* Ink hero — the app's root SafeAreaView already consumes the status-bar inset */}
       <View style={[styles.hero, { paddingTop: space.md }]}>
-        <Svg
-          style={styles.heroArc}
-          width="100%"
-          height={90}
-          viewBox="0 0 360 90"
-          preserveAspectRatio="none"
-          pointerEvents="none"
-        >
-          <Path
-            d="M-10,96 C90,88 200,62 252,42 C292,27 332,12 372,0 L372,96 Z"
-            fill={PROMO.gold}
-            opacity={0.06}
-          />
-          <Path
-            d="M-10,96 C90,88 200,62 252,42 C292,27 332,12 372,0"
-            stroke={PROMO.gold}
-            strokeWidth={2}
-            opacity={0.45}
-            fill="none"
-          />
-        </Svg>
         <View style={styles.heroNav}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -464,21 +443,60 @@ const ProjectInvestment = () => {
           <Text style={styles.heroTitle}>Project Investment</Text>
           <View style={styles.backBtn} />
         </View>
-        <Text style={styles.heroTagline}>
-          Turn savings into long-term project ownership
-        </Text>
+        <View style={styles.projectChip}>
+          <Building2 size={12} color={PROMO.mint} strokeWidth={1.8} />
+          <Text style={styles.projectChipText}>ODH Pay project</Text>
+          <BadgeCheck size={12} color={PROMO.mint} strokeWidth={1.8} />
+        </View>
+
+        <Text style={styles.stageLabel}>Investment amount</Text>
+        <View style={styles.stageAmountRow}>
+          <Text style={styles.stageRupee}>₹</Text>
+          <TextInput
+            style={styles.stageInput}
+            value={
+              amountFocused
+                ? amountText
+                : amountText
+                  ? Number(amountText).toLocaleString("en-IN")
+                  : ""
+            }
+            onChangeText={onInputChange}
+            onFocus={() => setAmountFocused(true)}
+            onBlur={() => {
+              setAmountFocused(false);
+              onInputBlur();
+            }}
+            keyboardType="number-pad"
+            returnKeyType="done"
+            accessibilityLabel="Investment amount in rupees"
+            placeholder="10,000"
+            placeholderTextColor="rgba(255,255,255,0.35)"
+          />
+        </View>
+        {words ? (
+          <Text style={styles.stageWords} numberOfLines={1}>
+            {words}
+          </Text>
+        ) : null}
+        {!amountValid && (
+          <Text style={styles.stageError}>
+            Enter between {formatINR(MIN_AMOUNT, { decimals: 0 })} and ₹10 Cr
+          </Text>
+        )}
+
+        <AmountSlider amount={amount} onChange={setAmountEverywhere} />
+
         <TouchableOpacity
-          style={styles.apyPill}
+          style={styles.apyInline}
           onPress={() => setSheet("apy")}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
           hitSlop={hitSlop8}
           accessibilityRole="button"
-          accessibilityLabel={`${APY} percent per annum annual percentage yield. Learn more`}
+          accessibilityLabel={`Earns ${APY} percent per annum annual percentage yield. Learn more`}
         >
-          <Text style={styles.apyPillText}>
-            {APY}% p.a. <Text style={styles.apyPillMuted}>APY</Text>
-          </Text>
-          <Info size={13} color={color.gray400} />
+          <Text style={styles.apyInlineText}>Earns {APY}% p.a. APY</Text>
+          <Info size={13} color={PROMO.gold} />
         </TouchableOpacity>
       </View>
 
@@ -490,62 +508,6 @@ const ProjectInvestment = () => {
       >
         {/* Form card */}
         <View style={styles.card}>
-          {/* Fixed project — single project, no dropdown */}
-          <Text style={styles.fieldLabel}>Project</Text>
-          <View style={styles.projectRow}>
-            <View style={styles.projectIcon}>
-              <Building2 size={20} color={color.textInverse} strokeWidth={1.8} />
-            </View>
-            <View style={styles.projectBody}>
-              <Text style={styles.projectName}>ODH Pay</Text>
-              <Text style={styles.projectMeta}>The only live project right now</Text>
-            </View>
-            <BadgeCheck size={20} color={color.text} strokeWidth={1.8} />
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Amount */}
-          <Text style={styles.fieldLabel}>Investment amount</Text>
-          <View style={[styles.amountBox, !amountValid && styles.amountBoxInvalid]}>
-            <Text style={styles.amountRupee}>₹</Text>
-            <TextInput
-              style={styles.amountInput}
-              value={
-                amountFocused
-                  ? amountText
-                  : amountText
-                    ? Number(amountText).toLocaleString("en-IN")
-                    : ""
-              }
-              onChangeText={onInputChange}
-              onFocus={() => setAmountFocused(true)}
-              onBlur={() => {
-                setAmountFocused(false);
-                onInputBlur();
-              }}
-              keyboardType="number-pad"
-              returnKeyType="done"
-              accessibilityLabel="Investment amount in rupees"
-              placeholder="10000"
-              placeholderTextColor={color.textTertiary}
-            />
-          </View>
-          {words ? (
-            <Text style={styles.amountWords} numberOfLines={1}>
-              {words}
-            </Text>
-          ) : null}
-          {!amountValid && (
-            <Text style={styles.amountError}>
-              Enter between {formatINR(MIN_AMOUNT, { decimals: 0 })} and ₹10 Cr
-            </Text>
-          )}
-
-          <AmountSlider amount={amount} onChange={setAmountEverywhere} />
-
-          <View style={styles.divider} />
-
           {/* Tenure */}
           <Text style={styles.fieldLabel}>Tenure</Text>
           <View style={styles.tenureRow}>
@@ -767,16 +729,9 @@ const styles = StyleSheet.create({
   hero: {
     backgroundColor: color.ink900,
     paddingHorizontal: space.lg,
-    paddingBottom: space.xxl,
+    paddingBottom: space.xl,
     borderBottomLeftRadius: radius.xxl,
     borderBottomRightRadius: radius.xxl,
-    overflow: "hidden",
-  },
-  heroArc: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
   },
   heroNav: {
     flexDirection: "row",
@@ -793,31 +748,72 @@ const styles = StyleSheet.create({
     ...type.h3,
     color: color.textInverse,
   },
-  heroTagline: {
-    ...type.body,
-    color: color.gray400,
-    textAlign: "center",
-    marginTop: space.md,
-    paddingHorizontal: space.xl,
-  },
-  apyPill: {
+  projectChip: {
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "center",
     gap: space.xs,
-    marginTop: space.base,
+    marginTop: space.sm,
     paddingHorizontal: space.md,
-    paddingVertical: space.sm,
+    paddingVertical: space.xs + 2,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: "rgba(245,182,63,0.4)",
+    backgroundColor: "rgba(255,255,255,0.07)",
   },
-  apyPillText: {
+  projectChipText: {
+    ...type.caption,
+    color: color.textInverse,
+  },
+  stageLabel: {
+    ...type.micro,
+    color: "rgba(255,255,255,0.5)",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    textAlign: "center",
+    marginTop: space.xl,
+  },
+  stageAmountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: space.sm,
+    marginTop: space.xs,
+  },
+  stageRupee: {
+    ...type.h1,
+    ...tabularNums,
+    color: "rgba(255,255,255,0.6)",
+  },
+  stageInput: {
+    ...type.display,
+    ...tabularNums,
+    color: color.textInverse,
+    textAlign: "center",
+    minWidth: 150,
+    paddingVertical: space.xs,
+  },
+  stageWords: {
+    ...type.bodySm,
+    color: PROMO.mint,
+    textAlign: "center",
+  },
+  stageError: {
+    ...type.bodySm,
+    color: "#FF9B9B",
+    textAlign: "center",
+    marginTop: space.xs,
+  },
+  apyInline: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "center",
+    gap: space.xs,
+    marginTop: space.md,
+  },
+  apyInlineText: {
     ...type.label,
     ...tabularNums,
     color: PROMO.gold,
   },
-  apyPillMuted: { color: color.gray400, fontWeight: "400" },
 
   /* layout */
   scroll: { flex: 1 },
@@ -847,59 +843,7 @@ const styles = StyleSheet.create({
     marginBottom: space.sm,
   },
 
-  /* project (fixed) */
-  projectRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.md,
-  },
-  projectIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    backgroundColor: color.ink900,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  projectBody: { flex: 1 },
-  projectName: { ...type.h3, color: color.text },
-  projectMeta: { ...type.caption, color: color.textSecondary, marginTop: 2 },
-
-  /* amount */
-  amountBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: color.borderStrong,
-    borderRadius: radius.md,
-    paddingHorizontal: space.base,
-  },
-  amountBoxInvalid: { borderColor: color.error },
-  amountRupee: {
-    ...type.h1,
-    ...tabularNums,
-    color: color.text,
-    marginRight: space.sm,
-  },
-  amountInput: {
-    flex: 1,
-    ...type.h1,
-    ...tabularNums,
-    color: color.text,
-    paddingVertical: space.md,
-  },
-  amountWords: {
-    ...type.bodySm,
-    color: color.textSecondary,
-    marginTop: space.sm,
-  },
-  amountError: {
-    ...type.bodySm,
-    color: color.errorFg,
-    marginTop: space.xs,
-  },
-
-  /* slider */
+  /* slider — lives on the dark stage: gold fill, white puck */
   sliderHitArea: {
     height: 44,
     justifyContent: "center",
@@ -908,20 +852,20 @@ const styles = StyleSheet.create({
   sliderTrack: {
     height: 6,
     borderRadius: radius.pill,
-    backgroundColor: color.gray200,
+    backgroundColor: "rgba(255,255,255,0.16)",
     overflow: "hidden",
   },
   sliderFill: {
     height: 6,
     borderRadius: radius.pill,
-    backgroundColor: color.ink900,
+    backgroundColor: PROMO.gold,
   },
   sliderThumb: {
     position: "absolute",
     width: THUMB,
     height: THUMB,
     borderRadius: THUMB / 2,
-    backgroundColor: color.ink900,
+    backgroundColor: color.white,
     alignItems: "center",
     justifyContent: "center",
     ...elevation.level2,
@@ -931,7 +875,7 @@ const styles = StyleSheet.create({
     height: THUMB - 6,
     borderRadius: (THUMB - 6) / 2,
     borderWidth: 2,
-    borderColor: color.white,
+    borderColor: PROMO.gold,
   },
   sliderRange: {
     flexDirection: "row",
@@ -941,7 +885,7 @@ const styles = StyleSheet.create({
   sliderRangeText: {
     ...type.caption,
     ...tabularNums,
-    color: color.textTertiary,
+    color: "rgba(255,255,255,0.45)",
   },
 
   /* tenure */
