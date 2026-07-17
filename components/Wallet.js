@@ -8,6 +8,7 @@ import {
   ScrollView,
   Dimensions,
   Animated,
+  Image,
   Platform,
   RefreshControl,
   Modal,
@@ -15,7 +16,6 @@ import {
   StatusBar,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import Svg, { Path } from "react-native-svg";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -367,28 +367,12 @@ const Wallet = () => {
           accessibilityRole="button"
           accessibilityLabel="Project Investment. Grow at 7.5 percent per annum, starting from ten thousand rupees. Open"
         >
-          <Svg
-            style={styles.investCurve}
-            width="100%"
-            height={56}
-            viewBox="0 0 320 56"
-            preserveAspectRatio="none"
-            pointerEvents="none"
-            aria-hidden
-          >
-            <Path
-              d="M0,52 C80,50 160,40 224,26 C264,17 296,8 320,2 L320,56 L0,56 Z"
-              fill={color.white}
-              opacity={0.05}
-            />
-            <Path
-              d="M0,52 C80,50 160,40 224,26 C264,17 296,8 320,2"
-              stroke={color.white}
-              strokeWidth={1.5}
-              opacity={0.25}
-              fill="none"
-            />
-          </Svg>
+          <Image
+            source={require("../assets/invest-banner.png")}
+            style={styles.investArt}
+            resizeMode="cover"
+            accessible={false}
+          />
           <View style={styles.investIcon}>
             <TrendingUp size={20} color={color.textInverse} strokeWidth={1.8} />
           </View>
@@ -668,11 +652,8 @@ const styles = StyleSheet.create({
     minHeight: 88,
     overflow: "hidden",
   },
-  investCurve: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
+  investArt: {
+    ...StyleSheet.absoluteFillObject,
   },
   investIcon: {
     width: 44,
