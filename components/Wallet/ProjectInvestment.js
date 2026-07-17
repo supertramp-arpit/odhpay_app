@@ -14,6 +14,9 @@ import React, {
 import {
   AccessibilityInfo,
   ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
   Modal,
   PanResponder,
   Pressable,
@@ -79,6 +82,15 @@ const REINVEST_OPTIONS = [
   "No re-investment",
 ];
 const PAYOUT_OPTIONS = ["On maturity", "Monthly payout"];
+
+// UPI intent options — app-specific schemes carry the same upi:// query.
+// "More apps" fires the generic intent, so MobiKwik & co. appear in the chooser.
+const UPI_APPS = [
+  { key: "phonepe", name: "PhonePe", scheme: "phonepe://pay", logo: require("../../assets/upi_phonepe.png") },
+  { key: "gpay", name: "GPay", scheme: "tez://upi/pay", logo: require("../../assets/upi_gpay.png") },
+  { key: "paytm", name: "Paytm", scheme: "paytmmp://pay", logo: require("../../assets/upi_paytm.png") },
+  { key: "other", name: "More apps", scheme: null, logo: require("../../assets/upi_upi.png") },
+];
 
 /* ---------------- helpers ---------------- */
 
@@ -574,6 +586,29 @@ const ProjectInvestment = () => {
   const walletInsufficient =
     walletAvailable !== null && walletAvailable < amount;
 
+  const openUpiApp = async (app) => {
+    const intent = investResult?.qr?.qr_string;
+    if (!intent) return;
+    const query = intent.split("?")[1] || "";
+    const url = app.scheme ? `${app.scheme}?${query}` : intent;
+    try {
+      await Linking.openURL(url);
+    } catch (e) {
+      if (app.scheme) {
+        try {
+          await Linking.openURL(intent); // fall back to the system UPI chooser
+          return;
+        } catch (e2) {
+          // fall through
+        }
+      }
+      Alert.alert(
+        "Couldn't open UPI app",
+        `${app.name} doesn't appear to be installed. Scan the QR from another device or choose a different app.`
+      );
+    }
+  };
+
   /* ---------- render ---------- */
 
   return (
@@ -1039,6 +1074,28 @@ const ProjectInvestment = () => {
                       Scan with any UPI app. Your investment activates automatically
                       once the payment is confirmed.
                     </Text>
+
+                    <Text style={styles.upiAppsLabel}>Or pay directly using</Text>
+                    <View style={styles.upiAppsRow}>
+                      {UPI_APPS.map((app) => (
+                        <TouchableOpacity
+                          key={app.key}
+                          style={styles.upiAppTile}
+                          onPress={() => openUpiApp(app)}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Pay using ${app.name}`}
+                        >
+                          <Image
+                            source={app.logo}
+                            style={styles.upiAppLogo}
+                            resizeMode="contain"
+                          />
+                          <Text style={styles.upiAppName}>{app.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
                     <View style={styles.qrWaitRow}>
                       <ActivityIndicator size="small" color={color.textSecondary} />
                       <Text style={styles.qrWaitText}>Waiting for payment…</Text>
@@ -1602,6 +1659,41 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: space.md,
     paddingHorizontal: space.lg,
+  },
+  upiAppsLabel: {
+    ...type.micro,
+    color: color.textTertiary,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    textAlign: "center",
+    marginTop: space.lg,
+  },
+  upiAppsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: space.sm,
+    marginTop: space.sm,
+  },
+  upiAppTile: {
+    minWidth: 72,
+    minHeight: 56,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: color.border,
+    backgroundColor: color.white,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: space.xs,
+  },
+  upiAppLogo: {
+    width: 56,
+    height: 20,
+  },
+  upiAppName: {
+    ...type.micro,
+    color: color.textSecondary,
   },
   qrWaitRow: {
     flexDirection: "row",
