@@ -1,7 +1,9 @@
-// Project Investment — lumpsum investment in the ODH Pay project.
-// Token-native (theme/tokens.js), lucide-only, money via shared formatINR.
-// Projection math: annual compounding FV = P × (1 + APY)^years; monthly-payout
-// mode pays simple interest monthly and returns capital at maturity.
+// Project Investment — plans, APY, and limits come from the backend
+// (GET /api/v1/investment/plans, admin-managed). Funding paths:
+//   • wallet balance  → PIN verify → POST /invest {payment_method:"wallet"}
+//   • ICICI UPI QR    → POST /invest {payment_method:"icici_qr"} → render QR,
+//     poll GET /status/{reference_id} until the UPI poller activates it.
+// QR is only offered for amounts ≤ ₹1,00,000 (ICICI UPI limit, server-enforced).
 import React, {
   useCallback,
   useEffect,
@@ -11,6 +13,7 @@ import React, {
 } from "react";
 import {
   AccessibilityInfo,
+  ActivityIndicator,
   Modal,
   PanResponder,
   Pressable,
@@ -22,12 +25,18 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
+import QRCode from "react-native-qrcode-svg";
 import {
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   Info,
+  QrCode,
+  Wallet as WalletIcon,
   X,
 } from "lucide-react-native";
 import {
@@ -40,8 +49,21 @@ import {
   hitSlop8,
 } from "../../theme/tokens";
 import { formatINR } from "../../utils/helper";
+import { getIntegrityToken } from "../../utils/integrity";
+import { useWalletStore } from "../../store";
 
-const APY = 7.5; // % p.a. — indicative, single source for every figure on screen
+const BASE_URL = "https://newapi.odhpay.com";
+const QR_LIMIT = 100000; // ≤ ₹1L may pay via UPI QR (ICICI limit)
+
+// Fallbacks while the plan loads; real values come from the backend
+const DEFAULT_PLAN = {
+  id: null,
+  name: "ODH Pay project",
+  apy_rate: 7.5,
+  min_amount: 10000,
+  max_amount: 100000000,
+  tenure_options: [1, 2, 3, 5],
+};
 
 // Investment promo palette — shared visual language with the wallet banner
 // (emerald ground + gold growth accents; contained to this feature only)
@@ -50,14 +72,7 @@ const PROMO = {
   mint: "#8CE0BE",
   gold: "#F5B63F",
 };
-const MIN_AMOUNT = 10000;
-const MAX_AMOUNT = 100000000; // ₹10 Cr
-const TENURES = [
-  { years: 1, label: "1 year" },
-  { years: 2, label: "2 years" },
-  { years: 3, label: "3 years" },
-  { years: 5, label: "5 years" },
-];
+
 const REINVEST_OPTIONS = [
   "Re-invest capital & returns",
   "Re-invest capital only",
@@ -89,7 +104,6 @@ const threeDigits = (n) => {
   return parts.join(" ");
 };
 
-// Indian-system amount in words, e.g. 10000 -> "Ten Thousand Rupees"
 const amountInWords = (value) => {
   const n = Math.floor(Math.abs(Number(value) || 0));
   if (n === 0) return "";
@@ -105,26 +119,17 @@ const amountInWords = (value) => {
   return `${parts.join(" ")} Rupees`;
 };
 
-// Snap slider output to a clean step for its magnitude
-const snapAmount = (raw) => {
+const snapAmount = (raw, min, max) => {
   let step;
   if (raw < 100000) step = 5000;
   else if (raw < 1000000) step = 25000;
   else if (raw < 10000000) step = 100000;
   else step = 2500000;
   const snapped = Math.round(raw / step) * step;
-  return Math.min(MAX_AMOUNT, Math.max(MIN_AMOUNT, snapped));
+  return Math.min(max, Math.max(min, snapped));
 };
 
-const LOG_MIN = Math.log(MIN_AMOUNT);
-const LOG_MAX = Math.log(MAX_AMOUNT);
-const amountToPosition = (amount) =>
-  (Math.log(Math.min(MAX_AMOUNT, Math.max(MIN_AMOUNT, amount))) - LOG_MIN) /
-  (LOG_MAX - LOG_MIN);
-const positionToAmount = (pos) =>
-  Math.exp(LOG_MIN + Math.min(1, Math.max(0, pos)) * (LOG_MAX - LOG_MIN));
-
-const maturityDate = (years) => {
+const maturityDateLabel = (years) => {
   const d = new Date();
   d.setFullYear(d.getFullYear() + years);
   return d.toLocaleDateString("en-IN", {
@@ -134,7 +139,11 @@ const maturityDate = (years) => {
   });
 };
 
-// Count-up that respects reduce-motion; animates only the displayed number
+const compactINR = (n) =>
+  n >= 10000000
+    ? `₹${(n / 10000000).toLocaleString("en-IN")} Cr`
+    : formatINR(n, { decimals: 0 });
+
 const useCountUp = (target, duration = 450) => {
   const [display, setDisplay] = useState(target);
   const displayRef = useRef(target);
@@ -153,7 +162,6 @@ const useCountUp = (target, duration = 450) => {
       setDisplay(target);
       return undefined;
     }
-    // Resume from whatever is currently on screen so rapid slider drags stay smooth
     const from = displayRef.current;
     const start = Date.now();
     const tick = () => {
@@ -171,44 +179,64 @@ const useCountUp = (target, duration = 450) => {
   return display;
 };
 
+const authHeaders = async () => {
+  const token = await AsyncStorage.getItem("access_token");
+  return {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+};
+
 /* ---------------- slider ---------------- */
 
 const THUMB = 28;
 
-const AmountSlider = ({ amount, onChange }) => {
+const AmountSlider = ({ amount, min, max, onChange, disabled }) => {
   const [trackWidth, setTrackWidth] = useState(0);
   const trackWidthRef = useRef(0);
   const startPosRef = useRef(null);
 
-  // PanResponder is created once; refs keep the latest values readable inside it
-  const latestAmount = useRef(amount);
-  latestAmount.current = amount;
-  const latestOnChange = useRef(onChange);
-  latestOnChange.current = onChange;
+  const logMin = Math.log(min);
+  const logMax = Math.log(max);
+  const toPosition = useCallback(
+    (a) => (Math.log(Math.min(max, Math.max(min, a))) - logMin) / (logMax - logMin),
+    [min, max, logMin, logMax]
+  );
+  const toAmount = useCallback(
+    (pos) => Math.exp(logMin + Math.min(1, Math.max(0, pos)) * (logMax - logMin)),
+    [logMin, logMax]
+  );
 
-  const position = amountToPosition(amount);
+  // PanResponder is created once; refs keep the latest values readable inside it
+  const latest = useRef({});
+  latest.current = { amount, min, max, onChange, toPosition, toAmount, disabled };
+
+  const position = toPosition(amount);
 
   const responder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => !latest.current.disabled,
+      onMoveShouldSetPanResponder: () => !latest.current.disabled,
       onPanResponderGrant: () => {
-        startPosRef.current = amountToPosition(latestAmount.current);
+        startPosRef.current = latest.current.toPosition(latest.current.amount);
       },
       onPanResponderMove: (_, gesture) => {
         const w = trackWidthRef.current;
         if (!w) return;
+        const { toAmount: ta, onChange: oc, min: mn, max: mx } = latest.current;
         const pos = startPosRef.current + gesture.dx / w;
-        latestOnChange.current(snapAmount(positionToAmount(pos)));
+        oc(snapAmount(ta(pos), mn, mx));
       },
     })
   ).current;
 
   const onTrackPress = (e) => {
+    if (disabled) return;
     const w = trackWidthRef.current;
     if (!w) return;
     const pos = e.nativeEvent.locationX / w;
-    onChange(snapAmount(positionToAmount(pos)));
+    onChange(snapAmount(toAmount(pos), min, max));
   };
 
   return (
@@ -222,9 +250,9 @@ const AmountSlider = ({ amount, onChange }) => {
         { name: "decrement", label: "Decrease amount" },
       ]}
       onAccessibilityAction={(e) => {
-        const pos = amountToPosition(amount);
+        const pos = toPosition(amount);
         const delta = e.nativeEvent.actionName === "increment" ? 0.04 : -0.04;
-        onChange(snapAmount(positionToAmount(pos + delta)));
+        onChange(snapAmount(toAmount(pos + delta), min, max));
       }}
     >
       <Pressable
@@ -253,10 +281,8 @@ const AmountSlider = ({ amount, onChange }) => {
         </View>
       </Pressable>
       <View style={styles.sliderRange}>
-        <Text style={styles.sliderRangeText}>
-          {formatINR(MIN_AMOUNT, { decimals: 0 })}
-        </Text>
-        <Text style={styles.sliderRangeText}>₹10 Cr</Text>
+        <Text style={styles.sliderRangeText}>{compactINR(min)}</Text>
+        <Text style={styles.sliderRangeText}>{compactINR(max)}</Text>
       </View>
     </View>
   );
@@ -308,8 +334,6 @@ const OptionSheet = ({ visible, title, options, selected, onSelect, onClose }) =
   </Modal>
 );
 
-/* ---------------- field row (select look-alike) ---------------- */
-
 const SelectRow = ({ label, value, onPress }) => (
   <TouchableOpacity
     style={styles.selectRow}
@@ -332,31 +356,80 @@ const SelectRow = ({ label, value, onPress }) => (
 
 const ProjectInvestment = () => {
   const navigation = useNavigation();
+  const { fetchBalance } = useWalletStore();
 
-  const [amount, setAmount] = useState(MIN_AMOUNT);
-  const [amountText, setAmountText] = useState(String(MIN_AMOUNT));
-  const [tenure, setTenure] = useState(TENURES[0]);
+  // Plan (dynamic, admin-managed)
+  const [planLoading, setPlanLoading] = useState(true);
+  const [planError, setPlanError] = useState(null);
+  const [plan, setPlan] = useState(null);
+
+  const active = plan || DEFAULT_PLAN;
+  const apy = Number(active.apy_rate);
+  const minAmount = Math.round(Number(active.min_amount));
+  const maxAmount = Math.round(Number(active.max_amount));
+  const tenures = (active.tenure_options || []).map((y) => ({
+    years: y,
+    label: y === 1 ? "1 year" : `${y} years`,
+  }));
+
+  const [amount, setAmount] = useState(DEFAULT_PLAN.min_amount);
+  const [amountText, setAmountText] = useState(String(DEFAULT_PLAN.min_amount));
+  const [amountFocused, setAmountFocused] = useState(false);
+  const [tenureYears, setTenureYears] = useState(DEFAULT_PLAN.tenure_options[0]);
   const [reinvest, setReinvest] = useState(REINVEST_OPTIONS[0]);
   const [payout, setPayout] = useState(PAYOUT_OPTIONS[0]);
-  const [sheet, setSheet] = useState(null); // 'reinvest' | 'payout' | 'apy' | 'review'
-  const [reviewNoticed, setReviewNoticed] = useState(false);
-  const [amountFocused, setAmountFocused] = useState(false);
+  const [sheet, setSheet] = useState(null); // 'reinvest' | 'payout' | 'apy' | 'pay'
+
+  // Payment flow
+  const [payStep, setPayStep] = useState("review"); // review|pin|processing|qr|success
+  const [payMethod, setPayMethod] = useState("wallet"); // 'wallet' | 'icici_qr'
+  const [payError, setPayError] = useState(null);
+  const [pinText, setPinText] = useState("");
+  const [walletAvailable, setWalletAvailable] = useState(null);
+  const [investResult, setInvestResult] = useState(null);
+  const pollRef = useRef(null);
+
+  const loadPlan = useCallback(async () => {
+    setPlanLoading(true);
+    setPlanError(null);
+    try {
+      const headers = await authHeaders();
+      const res = await axios.get(`${BASE_URL}/api/v1/investment/plans`, { headers });
+      const first = res.data?.plans?.[0];
+      if (!first) throw new Error("no-plan");
+      setPlan(first);
+      const mn = Math.round(Number(first.min_amount));
+      setAmount((a) => Math.min(Math.round(Number(first.max_amount)), Math.max(mn, a)));
+      setAmountText((t) => {
+        const n = Number(t) || 0;
+        return String(Math.min(Math.round(Number(first.max_amount)), Math.max(mn, n)));
+      });
+      setTenureYears((y) =>
+        (first.tenure_options || []).includes(y) ? y : first.tenure_options?.[0]
+      );
+    } catch (e) {
+      setPlanError("Couldn't load investment plans");
+    } finally {
+      setPlanLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPlan();
+    return () => pollRef.current && clearInterval(pollRef.current);
+  }, [loadPlan]);
 
   const monthlyPayout = payout === "Monthly payout";
 
   const projection = useMemo(() => {
-    const years = tenure.years;
+    const years = tenureYears;
     if (monthlyPayout) {
-      const monthly = (amount * (APY / 100)) / 12;
-      return {
-        maturity: amount,
-        returns: monthly * years * 12,
-        monthly,
-      };
+      const monthly = (amount * (apy / 100)) / 12;
+      return { maturity: amount, returns: monthly * years * 12, monthly };
     }
-    const maturity = amount * Math.pow(1 + APY / 100, years);
+    const maturity = amount * Math.pow(1 + apy / 100, years);
     return { maturity, returns: maturity - amount, monthly: 0 };
-  }, [amount, tenure, monthlyPayout]);
+  }, [amount, tenureYears, monthlyPayout, apy]);
 
   const animatedMaturity = useCountUp(projection.maturity);
 
@@ -369,19 +442,139 @@ const ProjectInvestment = () => {
     const digits = text.replace(/[^0-9]/g, "").slice(0, 9);
     setAmountText(digits);
     const n = Number(digits);
-    if (n >= MIN_AMOUNT && n <= MAX_AMOUNT) setAmount(n);
+    if (n >= minAmount && n <= maxAmount) setAmount(n);
   };
 
   const onInputBlur = () => {
     const n = Number(amountText) || 0;
-    const clamped = Math.min(MAX_AMOUNT, Math.max(MIN_AMOUNT, n));
-    setAmountEverywhere(clamped);
+    setAmountEverywhere(Math.min(maxAmount, Math.max(minAmount, n)));
   };
 
   const amountValid =
-    Number(amountText) >= MIN_AMOUNT && Number(amountText) <= MAX_AMOUNT;
+    Number(amountText) >= minAmount && Number(amountText) <= maxAmount;
+  const qrEligible = amount <= QR_LIMIT;
 
   const words = useMemo(() => amountInWords(Number(amountText)), [amountText]);
+
+  /* ---------- payment flow ---------- */
+
+  const openPaySheet = async () => {
+    setPayError(null);
+    setPinText("");
+    setInvestResult(null);
+    setPayStep("review");
+    setSheet("pay");
+    try {
+      const res = await fetchBalance();
+      const bal = parseFloat(res?.available_balance ?? res?.balance ?? 0);
+      setWalletAvailable(Number.isFinite(bal) ? bal : 0);
+      setPayMethod(bal >= amount ? "wallet" : qrEligible ? "icici_qr" : "wallet");
+    } catch (e) {
+      setWalletAvailable(null);
+    }
+  };
+
+  const closePaySheet = () => {
+    if (payStep === "processing") return; // don't dismiss mid-flight
+    if (pollRef.current) clearInterval(pollRef.current);
+    setSheet(null);
+  };
+
+  const doInvest = async (method) => {
+    setPayStep("processing");
+    setPayError(null);
+    try {
+      let integrity = { token: "", nonce: "" };
+      try {
+        integrity = await getIntegrityToken();
+      } catch (e) {
+        // Backend enforces integrity in prod; proceed and let it decide
+      }
+      const headers = {
+        ...(await authHeaders()),
+        ...(integrity.token && { "x-integrity-token": integrity.token }),
+        ...(integrity.nonce && { "x-integrity-nonce": integrity.nonce }),
+      };
+      const res = await axios.post(
+        `${BASE_URL}/api/v1/investment/invest`,
+        {
+          plan_id: active.id,
+          amount,
+          tenure_years: tenureYears,
+          reinvest_instruction: reinvest,
+          payout_mode: monthlyPayout ? "monthly" : "on_maturity",
+          payment_method: method,
+        },
+        { headers }
+      );
+      if (!res.data?.success) throw new Error(res.data?.message || "Failed");
+      setInvestResult(res.data);
+      if (method === "wallet") {
+        setPayStep("success");
+      } else {
+        setPayStep("qr");
+        startPolling(res.data.reference_id);
+      }
+    } catch (e) {
+      setPayError(
+        e?.response?.data?.detail || e?.message || "Something went wrong — try again"
+      );
+      setPayStep("review");
+    }
+  };
+
+  const startPolling = (referenceId) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const headers = await authHeaders();
+        const res = await axios.get(
+          `${BASE_URL}/api/v1/investment/status/${referenceId}`,
+          { headers }
+        );
+        const status = res.data?.status;
+        if (status === "active") {
+          clearInterval(pollRef.current);
+          setInvestResult((prev) => ({ ...prev, ...res.data, status: "active" }));
+          setPayStep("success");
+        } else if (status === "failed" || status === "expired") {
+          clearInterval(pollRef.current);
+          setPayError("Payment was not completed. No money was invested.");
+          setPayStep("review");
+        }
+      } catch (e) {
+        // keep polling; transient errors are fine
+      }
+    }, 5000);
+  };
+
+  const verifyPinAndInvest = async () => {
+    if (pinText.length < 4) return;
+    setPayStep("processing");
+    setPayError(null);
+    try {
+      const headers = await authHeaders();
+      const res = await axios.post(
+        `${BASE_URL}/register/verify_transaction_pin`,
+        { pincode: pinText },
+        { headers }
+      );
+      if (res.data?.success === false) throw new Error("Incorrect transaction PIN");
+      await doInvest("wallet");
+    } catch (e) {
+      setPayError(
+        e?.response?.data?.detail || e?.message || "PIN verification failed"
+      );
+      setPayStep("pin");
+    } finally {
+      setPinText("");
+    }
+  };
+
+  const walletInsufficient =
+    walletAvailable !== null && walletAvailable < amount;
+
+  /* ---------- render ---------- */
 
   return (
     <View style={styles.container}>
@@ -399,47 +592,76 @@ const ProjectInvestment = () => {
           >
             <ChevronLeft size={24} color={color.textInverse} />
           </TouchableOpacity>
-          <Text style={styles.heroTitle}>Project Investment</Text>
+          <Text style={styles.heroTitle}>{active.name || "Project Investment"}</Text>
         </View>
+
         {/* Amount plate — gives the stage content a surface instead of a void */}
         <View style={styles.stagePlate}>
-        <Text style={styles.stageLabel}>Investment amount</Text>
-        <View style={styles.stageAmountRow}>
-          <Text style={styles.stageRupee}>₹</Text>
-          <TextInput
-            style={styles.stageInput}
-            value={
-              amountFocused
-                ? amountText
-                : amountText
-                  ? Number(amountText).toLocaleString("en-IN")
-                  : ""
-            }
-            onChangeText={onInputChange}
-            onFocus={() => setAmountFocused(true)}
-            onBlur={() => {
-              setAmountFocused(false);
-              onInputBlur();
-            }}
-            keyboardType="number-pad"
-            returnKeyType="done"
-            accessibilityLabel="Investment amount in rupees"
-            placeholder="10,000"
-            placeholderTextColor="rgba(255,255,255,0.35)"
-          />
-        </View>
-        {words ? (
-          <Text style={styles.stageWords} numberOfLines={1}>
-            {words}
-          </Text>
-        ) : null}
-        {!amountValid && (
-          <Text style={styles.stageError}>
-            Enter between {formatINR(MIN_AMOUNT, { decimals: 0 })} and ₹10 Cr
-          </Text>
-        )}
-
-        <AmountSlider amount={amount} onChange={setAmountEverywhere} />
+          {planLoading ? (
+            <View style={styles.planLoadingWrap}>
+              <View style={styles.skelLineSm} />
+              <View style={styles.skelLineLg} />
+              <View style={styles.skelLineMd} />
+            </View>
+          ) : planError ? (
+            <View style={styles.planLoadingWrap}>
+              <Text style={styles.planErrorText}>{planError}</Text>
+              <TouchableOpacity
+                style={styles.planRetryBtn}
+                onPress={loadPlan}
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading plans"
+              >
+                <Text style={styles.planRetryText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.stageLabel}>Investment amount</Text>
+              <View style={styles.stageAmountRow}>
+                <Text style={styles.stageRupee}>₹</Text>
+                <TextInput
+                  style={styles.stageInput}
+                  value={
+                    amountFocused
+                      ? amountText
+                      : amountText
+                        ? Number(amountText).toLocaleString("en-IN")
+                        : ""
+                  }
+                  onChangeText={onInputChange}
+                  onFocus={() => setAmountFocused(true)}
+                  onBlur={() => {
+                    setAmountFocused(false);
+                    onInputBlur();
+                  }}
+                  keyboardType="number-pad"
+                  returnKeyType="done"
+                  accessibilityLabel="Investment amount in rupees"
+                  placeholder={String(minAmount)}
+                  placeholderTextColor="rgba(255,255,255,0.35)"
+                />
+              </View>
+              {words ? (
+                <Text style={styles.stageWords} numberOfLines={1}>
+                  {words}
+                </Text>
+              ) : null}
+              {!amountValid && (
+                <Text style={styles.stageError}>
+                  Enter between {formatINR(minAmount, { decimals: 0 })} and{" "}
+                  {compactINR(maxAmount)}
+                </Text>
+              )}
+              <AmountSlider
+                amount={amount}
+                min={minAmount}
+                max={maxAmount}
+                onChange={setAmountEverywhere}
+                disabled={planLoading}
+              />
+            </>
+          )}
         </View>
 
         <TouchableOpacity
@@ -448,9 +670,9 @@ const ProjectInvestment = () => {
           activeOpacity={0.7}
           hitSlop={hitSlop8}
           accessibilityRole="button"
-          accessibilityLabel={`Earns ${APY} percent per annum annual percentage yield. Learn more`}
+          accessibilityLabel={`Earns ${apy} percent per annum annual percentage yield. Learn more`}
         >
-          <Text style={styles.apyInlineText}>Earns {APY}% p.a. APY</Text>
+          <Text style={styles.apyInlineText}>Earns {apy}% p.a. APY</Text>
           <Info size={13} color={PROMO.gold} />
         </TouchableOpacity>
       </View>
@@ -466,18 +688,20 @@ const ProjectInvestment = () => {
           {/* Tenure */}
           <Text style={styles.fieldLabel}>Tenure</Text>
           <View style={styles.tenureRow}>
-            {TENURES.map((t) => {
-              const active = t.years === tenure.years;
+            {tenures.map((t) => {
+              const isActive = t.years === tenureYears;
               return (
                 <TouchableOpacity
                   key={t.years}
-                  style={[styles.tenureChip, active && styles.tenureChipActive]}
-                  onPress={() => setTenure(t)}
+                  style={[styles.tenureChip, isActive && styles.tenureChipActive]}
+                  onPress={() => setTenureYears(t.years)}
                   accessibilityRole="radio"
-                  accessibilityState={{ selected: active }}
+                  accessibilityState={{ selected: isActive }}
                   accessibilityLabel={`Tenure ${t.label}`}
                 >
-                  <Text style={[styles.tenureChipText, active && styles.tenureChipTextActive]}>
+                  <Text
+                    style={[styles.tenureChipText, isActive && styles.tenureChipTextActive]}
+                  >
                     {t.label}
                   </Text>
                 </TouchableOpacity>
@@ -531,16 +755,18 @@ const ProjectInvestment = () => {
             </View>
             <View style={styles.projectionCell}>
               <Text style={styles.projectionCellLabel}>APY rate</Text>
-              <Text style={styles.projectionCellValue}>{APY}% p.a.</Text>
+              <Text style={styles.projectionCellValue}>{apy}% p.a.</Text>
             </View>
             <View style={[styles.projectionCell, styles.projectionCellRight]}>
               <Text style={styles.projectionCellLabel}>Maturity date</Text>
-              <Text style={styles.projectionCellValue}>{maturityDate(tenure.years)}</Text>
+              <Text style={styles.projectionCellValue}>
+                {maturityDateLabel(tenureYears)}
+              </Text>
             </View>
           </View>
 
           <Text style={styles.projectionNote}>
-            Projection at {APY}% p.a. — indicative, not a guarantee
+            Projection at {apy}% p.a. — indicative, not a guarantee
           </Text>
         </View>
       </ScrollView>
@@ -548,16 +774,16 @@ const ProjectInvestment = () => {
       {/* Sticky CTA */}
       <View style={[styles.ctaBar, { paddingBottom: space.base }]}>
         <TouchableOpacity
-          style={[styles.ctaButton, !amountValid && styles.ctaButtonDisabled]}
-          onPress={() => {
-            setReviewNoticed(false);
-            setSheet("review");
-          }}
-          disabled={!amountValid}
+          style={[
+            styles.ctaButton,
+            (!amountValid || planLoading || !!planError) && styles.ctaButtonDisabled,
+          ]}
+          onPress={openPaySheet}
+          disabled={!amountValid || planLoading || !!planError}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel="Continue to review investment"
-          accessibilityState={{ disabled: !amountValid }}
+          accessibilityLabel="Continue to payment"
+          accessibilityState={{ disabled: !amountValid || planLoading || !!planError }}
         >
           <Text style={styles.ctaText}>Continue</Text>
         </TouchableOpacity>
@@ -595,8 +821,8 @@ const ProjectInvestment = () => {
             <Text style={styles.sheetTitle}>APY — Annual Percentage Yield</Text>
             <Text style={styles.sheetBody}>
               APY is the yearly return on your investment with annual compounding
-              included. At {APY}% p.a., {formatINR(10000, { decimals: 0 })} grows to{" "}
-              {formatINR(10000 * (1 + APY / 100), { decimals: 0 })} in one year.
+              included. At {apy}% p.a., {formatINR(10000, { decimals: 0 })} grows to{" "}
+              {formatINR(10000 * (1 + apy / 100), { decimals: 0 })} in one year.
               Returns are indicative and depend on project performance.
             </Text>
             <TouchableOpacity
@@ -611,62 +837,283 @@ const ProjectInvestment = () => {
         </View>
       </Modal>
 
-      {/* Review sheet */}
+      {/* Payment sheet: review → pin/qr → success */}
       <Modal
-        visible={sheet === "review"}
+        visible={sheet === "pay"}
         transparent
         animationType="slide"
-        onRequestClose={() => setSheet(null)}
+        onRequestClose={closePaySheet}
       >
         <View style={styles.sheetOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setSheet(null)} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={closePaySheet} />
           <View style={styles.sheet}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Review your investment</Text>
 
-            {[
-              ["Project", "ODH Pay"],
-              ["Amount", formatINR(amount, { decimals: 0 })],
-              ["Tenure", tenure.label],
-              ["Re-investment", reinvest],
-              ["Returns", payout],
-              [
-                monthlyPayout ? "Monthly payout" : "Value on maturity",
-                monthlyPayout
-                  ? formatINR(projection.monthly)
-                  : formatINR(projection.maturity),
-              ],
-            ].map(([k, v]) => (
-              <View key={k} style={styles.reviewRow}>
-                <Text style={styles.reviewKey}>{k}</Text>
-                <Text style={styles.reviewValue} numberOfLines={1}>
-                  {v}
-                </Text>
-              </View>
-            ))}
+            {payStep === "review" && (
+              <>
+                <Text style={styles.sheetTitle}>Review your investment</Text>
+                {[
+                  ["Project", active.name],
+                  ["Amount", formatINR(amount, { decimals: 0 })],
+                  ["Tenure", tenureYears === 1 ? "1 year" : `${tenureYears} years`],
+                  [
+                    monthlyPayout ? "Monthly payout" : "Value on maturity",
+                    monthlyPayout
+                      ? formatINR(projection.monthly)
+                      : formatINR(projection.maturity),
+                  ],
+                ].map(([k, v]) => (
+                  <View key={k} style={styles.reviewRow}>
+                    <Text style={styles.reviewKey}>{k}</Text>
+                    <Text style={styles.reviewValue} numberOfLines={1}>
+                      {v}
+                    </Text>
+                  </View>
+                ))}
 
-            {reviewNoticed && (
-              <View style={styles.noticeBox}>
-                <Info size={16} color={color.infoFg} />
-                <Text style={styles.noticeText}>
-                  Investment booking opens soon. Nothing has been debited from
-                  your wallet yet.
+                <Text style={[styles.fieldLabel, { marginTop: space.lg }]}>Pay using</Text>
+
+                <TouchableOpacity
+                  style={[
+                    styles.methodRow,
+                    payMethod === "wallet" && styles.methodRowActive,
+                    walletInsufficient && styles.methodRowDisabled,
+                  ]}
+                  disabled={walletInsufficient}
+                  onPress={() => setPayMethod("wallet")}
+                  accessibilityRole="radio"
+                  accessibilityState={{
+                    selected: payMethod === "wallet",
+                    disabled: walletInsufficient,
+                  }}
+                  accessibilityLabel={`Pay from wallet balance${
+                    walletAvailable !== null
+                      ? `, ${formatINR(walletAvailable)} available`
+                      : ""
+                  }`}
+                >
+                  <View style={styles.methodIcon}>
+                    <WalletIcon size={18} color={color.text} strokeWidth={1.8} />
+                  </View>
+                  <View style={styles.methodBody}>
+                    <Text style={styles.methodTitle}>Wallet balance</Text>
+                    <Text
+                      style={[
+                        styles.methodSub,
+                        walletInsufficient && { color: color.errorFg },
+                      ]}
+                    >
+                      {walletAvailable === null
+                        ? "Checking balance…"
+                        : walletInsufficient
+                          ? `Insufficient — ${formatINR(walletAvailable)} available`
+                          : `${formatINR(walletAvailable)} available`}
+                    </Text>
+                  </View>
+                  {payMethod === "wallet" && !walletInsufficient && (
+                    <Check size={18} color={color.text} strokeWidth={2.5} />
+                  )}
+                </TouchableOpacity>
+
+                {qrEligible && (
+                  <TouchableOpacity
+                    style={[
+                      styles.methodRow,
+                      payMethod === "icici_qr" && styles.methodRowActive,
+                    ]}
+                    onPress={() => setPayMethod("icici_qr")}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: payMethod === "icici_qr" }}
+                    accessibilityLabel="Pay via UPI QR, scan with any UPI app"
+                  >
+                    <View style={styles.methodIcon}>
+                      <QrCode size={18} color={color.text} strokeWidth={1.8} />
+                    </View>
+                    <View style={styles.methodBody}>
+                      <Text style={styles.methodTitle}>UPI QR</Text>
+                      <Text style={styles.methodSub}>Scan & pay from any UPI app</Text>
+                    </View>
+                    {payMethod === "icici_qr" && (
+                      <Check size={18} color={color.text} strokeWidth={2.5} />
+                    )}
+                  </TouchableOpacity>
+                )}
+                {!qrEligible && (
+                  <Text style={styles.methodNote}>
+                    UPI QR is available for amounts up to {formatINR(QR_LIMIT, { decimals: 0 })}
+                  </Text>
+                )}
+
+                {payError && (
+                  <View style={styles.errorBox}>
+                    <Info size={16} color={color.errorFg} />
+                    <Text style={styles.errorBoxText}>{payError}</Text>
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[
+                    styles.sheetPrimaryBtn,
+                    payMethod === "wallet" && walletInsufficient && styles.ctaButtonDisabled,
+                  ]}
+                  disabled={payMethod === "wallet" && walletInsufficient}
+                  onPress={() =>
+                    payMethod === "wallet" ? setPayStep("pin") : doInvest("icici_qr")
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel="Confirm investment"
+                >
+                  <Text style={styles.sheetPrimaryBtnText}>
+                    {payMethod === "wallet" ? "Confirm & Pay" : "Show QR to pay"}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {payStep === "pin" && (
+              <>
+                <Text style={styles.sheetTitle}>Enter transaction PIN</Text>
+                <Text style={styles.sheetBody}>
+                  Confirm paying {formatINR(amount, { decimals: 0 })} from your wallet.
                 </Text>
+                <TextInput
+                  style={styles.pinInput}
+                  value={pinText}
+                  onChangeText={(t) => setPinText(t.replace(/[^0-9]/g, "").slice(0, 6))}
+                  keyboardType="number-pad"
+                  secureTextEntry
+                  maxLength={6}
+                  autoFocus
+                  accessibilityLabel="Transaction PIN"
+                  placeholder="••••••"
+                  placeholderTextColor={color.textTertiary}
+                />
+                {payError && (
+                  <View style={styles.errorBox}>
+                    <Info size={16} color={color.errorFg} />
+                    <Text style={styles.errorBoxText}>{payError}</Text>
+                  </View>
+                )}
+                <TouchableOpacity
+                  style={[
+                    styles.sheetPrimaryBtn,
+                    pinText.length < 4 && styles.ctaButtonDisabled,
+                  ]}
+                  disabled={pinText.length < 4}
+                  onPress={verifyPinAndInvest}
+                  accessibilityRole="button"
+                  accessibilityLabel="Verify PIN and pay"
+                >
+                  <Text style={styles.sheetPrimaryBtnText}>Verify & Pay</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.sheetGhostBtn}
+                  onPress={() => {
+                    setPayError(null);
+                    setPayStep("review");
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to review"
+                >
+                  <Text style={styles.sheetGhostBtnText}>Back</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {payStep === "processing" && (
+              <View style={styles.processingWrap}>
+                <ActivityIndicator size="large" color={color.ink900} />
+                <Text style={styles.processingText}>Processing your investment…</Text>
               </View>
             )}
 
-            <TouchableOpacity
-              style={styles.sheetPrimaryBtn}
-              onPress={() =>
-                reviewNoticed ? setSheet(null) : setReviewNoticed(true)
-              }
-              accessibilityRole="button"
-              accessibilityLabel={reviewNoticed ? "Close review" : "Confirm investment"}
-            >
-              <Text style={styles.sheetPrimaryBtnText}>
-                {reviewNoticed ? "Got it" : "Confirm investment"}
-              </Text>
-            </TouchableOpacity>
+            {payStep === "qr" && (
+              <>
+                <Text style={styles.sheetTitle}>Scan to pay {formatINR(amount, { decimals: 0 })}</Text>
+                {investResult?.qr?.qr_string ? (
+                  <>
+                    <View style={styles.qrWrap}>
+                      <QRCode value={investResult.qr.qr_string} size={200} />
+                    </View>
+                    <Text style={styles.qrHint}>
+                      Scan with any UPI app. Your investment activates automatically
+                      once the payment is confirmed.
+                    </Text>
+                    <View style={styles.qrWaitRow}>
+                      <ActivityIndicator size="small" color={color.textSecondary} />
+                      <Text style={styles.qrWaitText}>Waiting for payment…</Text>
+                    </View>
+                  </>
+                ) : (
+                  <View style={styles.errorBox}>
+                    <Info size={16} color={color.errorFg} />
+                    <Text style={styles.errorBoxText}>
+                      QR could not be generated. Please pay from wallet balance instead.
+                    </Text>
+                  </View>
+                )}
+                <TouchableOpacity
+                  style={styles.sheetGhostBtn}
+                  onPress={() => {
+                    if (pollRef.current) clearInterval(pollRef.current);
+                    setPayStep("review");
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel QR payment"
+                >
+                  <Text style={styles.sheetGhostBtnText}>Cancel</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {payStep === "success" && (
+              <>
+                <View style={styles.successWrap}>
+                  <CheckCircle2 size={48} color={color.success} strokeWidth={1.5} />
+                  <Text style={styles.successTitle}>Investment active</Text>
+                  <Text style={styles.successSub}>
+                    {formatINR(Number(investResult?.amount || amount))} in {active.name}
+                  </Text>
+                </View>
+                {[
+                  ["Reference", investResult?.reference_id],
+                  [
+                    "Maturity date",
+                    investResult?.maturity_date
+                      ? new Date(investResult.maturity_date).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })
+                      : maturityDateLabel(tenureYears),
+                  ],
+                  monthlyPayout
+                    ? ["Monthly payout", formatINR(Number(investResult?.monthly_payout || projection.monthly))]
+                    : ["Maturity value", formatINR(Number(investResult?.maturity_amount || projection.maturity))],
+                  ...(investResult?.balance_after
+                    ? [["Wallet balance", formatINR(Number(investResult.balance_after))]]
+                    : []),
+                ].map(([k, v]) => (
+                  <View key={k} style={styles.reviewRow}>
+                    <Text style={styles.reviewKey}>{k}</Text>
+                    <Text style={styles.reviewValue} numberOfLines={1}>
+                      {v}
+                    </Text>
+                  </View>
+                ))}
+                <TouchableOpacity
+                  style={styles.sheetPrimaryBtn}
+                  onPress={() => {
+                    setSheet(null);
+                    navigation.goBack();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Done"
+                >
+                  <Text style={styles.sheetPrimaryBtnText}>Done</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -708,6 +1155,46 @@ const styles = StyleSheet.create({
     paddingVertical: space.lg,
     paddingHorizontal: space.lg,
     marginTop: space.md,
+  },
+  planLoadingWrap: {
+    alignItems: "center",
+    paddingVertical: space.lg,
+    gap: space.md,
+  },
+  skelLineSm: {
+    width: 120,
+    height: 10,
+    borderRadius: radius.xs,
+    backgroundColor: "rgba(255,255,255,0.10)",
+  },
+  skelLineLg: {
+    width: 200,
+    height: 30,
+    borderRadius: radius.sm,
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  skelLineMd: {
+    width: "100%",
+    height: 8,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(255,255,255,0.10)",
+  },
+  planErrorText: {
+    ...type.body,
+    color: "rgba(255,255,255,0.75)",
+    textAlign: "center",
+  },
+  planRetryBtn: {
+    minHeight: 44,
+    paddingHorizontal: space.xl,
+    borderRadius: radius.pill,
+    backgroundColor: color.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  planRetryText: {
+    ...type.buttonSm,
+    color: color.ink900,
   },
   stageLabel: {
     ...type.micro,
@@ -1010,8 +1497,15 @@ const styles = StyleSheet.create({
     marginTop: space.lg,
   },
   sheetPrimaryBtnText: { ...type.button, color: color.textInverse },
+  sheetGhostBtn: {
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: space.sm,
+  },
+  sheetGhostBtnText: { ...type.buttonSm, color: color.textSecondary },
 
-  /* review */
+  /* review + payment */
   reviewRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1028,16 +1522,102 @@ const styles = StyleSheet.create({
     color: color.text,
     flexShrink: 1,
   },
-  noticeBox: {
+  methodRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.md,
+    padding: space.md,
+    minHeight: 56,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: color.border,
+    marginBottom: space.sm,
+  },
+  methodRowActive: {
+    borderColor: color.ink900,
+    backgroundColor: color.surfaceMuted,
+  },
+  methodRowDisabled: { opacity: 0.55 },
+  methodIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
+    backgroundColor: color.gray150,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  methodBody: { flex: 1 },
+  methodTitle: { ...type.label, color: color.text },
+  methodSub: {
+    ...type.caption,
+    ...tabularNums,
+    color: color.textSecondary,
+    marginTop: 2,
+  },
+  methodNote: {
+    ...type.caption,
+    color: color.textTertiary,
+    marginBottom: space.sm,
+  },
+  errorBox: {
     flexDirection: "row",
     gap: space.sm,
-    backgroundColor: color.infoBg,
+    backgroundColor: color.errorBg,
     borderRadius: radius.md,
     padding: space.md,
-    marginTop: space.base,
+    marginTop: space.sm,
     alignItems: "flex-start",
   },
-  noticeText: { ...type.bodySm, color: color.infoFg, flex: 1 },
+  errorBoxText: { ...type.bodySm, color: color.errorFg, flex: 1 },
+  pinInput: {
+    ...type.h1,
+    ...tabularNums,
+    color: color.text,
+    textAlign: "center",
+    letterSpacing: 8,
+    borderWidth: 1,
+    borderColor: color.borderStrong,
+    borderRadius: radius.md,
+    paddingVertical: space.md,
+    marginTop: space.lg,
+  },
+  processingWrap: {
+    alignItems: "center",
+    paddingVertical: space.giant,
+    gap: space.base,
+  },
+  processingText: { ...type.body, color: color.textSecondary },
+  qrWrap: {
+    alignSelf: "center",
+    padding: space.base,
+    backgroundColor: color.white,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: color.border,
+    marginTop: space.lg,
+  },
+  qrHint: {
+    ...type.bodySm,
+    color: color.textSecondary,
+    textAlign: "center",
+    marginTop: space.md,
+    paddingHorizontal: space.lg,
+  },
+  qrWaitRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: space.sm,
+    marginTop: space.md,
+  },
+  qrWaitText: { ...type.bodySm, color: color.textSecondary },
+  successWrap: {
+    alignItems: "center",
+    paddingVertical: space.lg,
+    gap: space.xs,
+  },
+  successTitle: { ...type.h2, color: color.text, marginTop: space.sm },
+  successSub: { ...type.body, ...tabularNums, color: color.textSecondary },
 });
 
 export default ProjectInvestment;
