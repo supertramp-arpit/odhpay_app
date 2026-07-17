@@ -109,6 +109,7 @@ import axios from "axios";
 import OtpVerify from "./screens/Security/OtpVerify";
 import OdhRupees from "./components/Wallet/odhRupees";
 import ProjectInvestment from "./components/Wallet/ProjectInvestment";
+import InvestmentQRScreen from "./components/Wallet/InvestmentQRScreen";
 import OdhMoney from "./components/Wallet/odhMoney";
 import SecurityPin from "./components/Wallet/SecurityPin";
 import Scan from "./components/ScanPay/Scan";
@@ -884,6 +885,12 @@ export default function AppNavigator() {
                 <Stack.Screen
                   name="ProjectInvestment"
                   component={ProjectInvestment}
+                  options={{ headerShown: false }}
+                />
+
+                <Stack.Screen
+                  name="InvestmentQR"
+                  component={InvestmentQRScreen}
                   options={{ headerShown: false }}
                 />
 

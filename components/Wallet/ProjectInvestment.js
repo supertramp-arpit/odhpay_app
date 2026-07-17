@@ -14,9 +14,6 @@ import React, {
 import {
   AccessibilityInfo,
   ActivityIndicator,
-  Alert,
-  Image,
-  Linking,
   Modal,
   PanResponder,
   Pressable,
@@ -31,7 +28,6 @@ import {
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-import QRCode from "react-native-qrcode-svg";
 import {
   Check,
   CheckCircle2,
@@ -82,15 +78,6 @@ const REINVEST_OPTIONS = [
   "No re-investment",
 ];
 const PAYOUT_OPTIONS = ["On maturity", "Monthly payout"];
-
-// UPI intent options — app-specific schemes carry the same upi:// query.
-// "More apps" fires the generic intent, so MobiKwik & co. appear in the chooser.
-const UPI_APPS = [
-  { key: "phonepe", name: "PhonePe", scheme: "phonepe://pay", logo: require("../../assets/upi_phonepe.png") },
-  { key: "gpay", name: "GPay", scheme: "tez://upi/pay", logo: require("../../assets/upi_gpay.png") },
-  { key: "paytm", name: "Paytm", scheme: "paytmmp://pay", logo: require("../../assets/upi_paytm.png") },
-  { key: "other", name: "More apps", scheme: null, logo: require("../../assets/upi_upi.png") },
-];
 
 /* ---------------- helpers ---------------- */
 
@@ -399,7 +386,6 @@ const ProjectInvestment = () => {
   const [pinText, setPinText] = useState("");
   const [walletAvailable, setWalletAvailable] = useState(null);
   const [investResult, setInvestResult] = useState(null);
-  const pollRef = useRef(null);
 
   const loadPlan = useCallback(async () => {
     setPlanLoading(true);
@@ -428,7 +414,6 @@ const ProjectInvestment = () => {
 
   useEffect(() => {
     loadPlan();
-    return () => pollRef.current && clearInterval(pollRef.current);
   }, [loadPlan]);
 
   const monthlyPayout = payout === "Monthly payout";
@@ -488,7 +473,6 @@ const ProjectInvestment = () => {
 
   const closePaySheet = () => {
     if (payStep === "processing") return; // don't dismiss mid-flight
-    if (pollRef.current) clearInterval(pollRef.current);
     setSheet(null);
   };
 
@@ -524,8 +508,13 @@ const ProjectInvestment = () => {
       if (method === "wallet") {
         setPayStep("success");
       } else {
-        setPayStep("qr");
-        startPolling(res.data.reference_id);
+        // QR payment gets its own screen (QR + UPI intents + live status)
+        setSheet(null);
+        navigation.navigate("InvestmentQR", {
+          invest: res.data,
+          planName: active.name,
+          monthlyPayout,
+        });
       }
     } catch (e) {
       setPayError(
@@ -533,31 +522,6 @@ const ProjectInvestment = () => {
       );
       setPayStep("review");
     }
-  };
-
-  const startPolling = (referenceId) => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
-      try {
-        const headers = await authHeaders();
-        const res = await axios.get(
-          `${BASE_URL}/api/v1/investment/status/${referenceId}`,
-          { headers }
-        );
-        const status = res.data?.status;
-        if (status === "active") {
-          clearInterval(pollRef.current);
-          setInvestResult((prev) => ({ ...prev, ...res.data, status: "active" }));
-          setPayStep("success");
-        } else if (status === "failed" || status === "expired") {
-          clearInterval(pollRef.current);
-          setPayError("Payment was not completed. No money was invested.");
-          setPayStep("review");
-        }
-      } catch (e) {
-        // keep polling; transient errors are fine
-      }
-    }, 5000);
   };
 
   const verifyPinAndInvest = async () => {
@@ -585,29 +549,6 @@ const ProjectInvestment = () => {
 
   const walletInsufficient =
     walletAvailable !== null && walletAvailable < amount;
-
-  const openUpiApp = async (app) => {
-    const intent = investResult?.qr?.qr_string;
-    if (!intent) return;
-    const query = intent.split("?")[1] || "";
-    const url = app.scheme ? `${app.scheme}?${query}` : intent;
-    try {
-      await Linking.openURL(url);
-    } catch (e) {
-      if (app.scheme) {
-        try {
-          await Linking.openURL(intent); // fall back to the system UPI chooser
-          return;
-        } catch (e2) {
-          // fall through
-        }
-      }
-      Alert.alert(
-        "Couldn't open UPI app",
-        `${app.name} doesn't appear to be installed. Scan the QR from another device or choose a different app.`
-      );
-    }
-  };
 
   /* ---------- render ---------- */
 
@@ -1060,67 +1001,6 @@ const ProjectInvestment = () => {
                 <ActivityIndicator size="large" color={color.ink900} />
                 <Text style={styles.processingText}>Processing your investment…</Text>
               </View>
-            )}
-
-            {payStep === "qr" && (
-              <>
-                <Text style={styles.sheetTitle}>Scan to pay {formatINR(amount, { decimals: 0 })}</Text>
-                {investResult?.qr?.qr_string ? (
-                  <>
-                    <View style={styles.qrWrap}>
-                      <QRCode value={investResult.qr.qr_string} size={200} />
-                    </View>
-                    <Text style={styles.qrHint}>
-                      Scan with any UPI app. Your investment activates automatically
-                      once the payment is confirmed.
-                    </Text>
-
-                    <Text style={styles.upiAppsLabel}>Or pay directly using</Text>
-                    <View style={styles.upiAppsRow}>
-                      {UPI_APPS.map((app) => (
-                        <TouchableOpacity
-                          key={app.key}
-                          style={styles.upiAppTile}
-                          onPress={() => openUpiApp(app)}
-                          activeOpacity={0.7}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Pay using ${app.name}`}
-                        >
-                          <Image
-                            source={app.logo}
-                            style={styles.upiAppLogo}
-                            resizeMode="contain"
-                          />
-                          <Text style={styles.upiAppName}>{app.name}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-
-                    <View style={styles.qrWaitRow}>
-                      <ActivityIndicator size="small" color={color.textSecondary} />
-                      <Text style={styles.qrWaitText}>Waiting for payment…</Text>
-                    </View>
-                  </>
-                ) : (
-                  <View style={styles.errorBox}>
-                    <Info size={16} color={color.errorFg} />
-                    <Text style={styles.errorBoxText}>
-                      QR could not be generated. Please pay from wallet balance instead.
-                    </Text>
-                  </View>
-                )}
-                <TouchableOpacity
-                  style={styles.sheetGhostBtn}
-                  onPress={() => {
-                    if (pollRef.current) clearInterval(pollRef.current);
-                    setPayStep("review");
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Cancel QR payment"
-                >
-                  <Text style={styles.sheetGhostBtnText}>Cancel</Text>
-                </TouchableOpacity>
-              </>
             )}
 
             {payStep === "success" && (
@@ -1644,65 +1524,6 @@ const styles = StyleSheet.create({
     gap: space.base,
   },
   processingText: { ...type.body, color: color.textSecondary },
-  qrWrap: {
-    alignSelf: "center",
-    padding: space.base,
-    backgroundColor: color.white,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: color.border,
-    marginTop: space.lg,
-  },
-  qrHint: {
-    ...type.bodySm,
-    color: color.textSecondary,
-    textAlign: "center",
-    marginTop: space.md,
-    paddingHorizontal: space.lg,
-  },
-  upiAppsLabel: {
-    ...type.micro,
-    color: color.textTertiary,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    textAlign: "center",
-    marginTop: space.lg,
-  },
-  upiAppsRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: space.sm,
-    marginTop: space.sm,
-  },
-  upiAppTile: {
-    minWidth: 72,
-    minHeight: 56,
-    paddingHorizontal: space.sm,
-    paddingVertical: space.sm,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: color.border,
-    backgroundColor: color.white,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: space.xs,
-  },
-  upiAppLogo: {
-    width: 56,
-    height: 20,
-  },
-  upiAppName: {
-    ...type.micro,
-    color: color.textSecondary,
-  },
-  qrWaitRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: space.sm,
-    marginTop: space.md,
-  },
-  qrWaitText: { ...type.bodySm, color: color.textSecondary },
   successWrap: {
     alignItems: "center",
     paddingVertical: space.lg,
