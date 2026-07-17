@@ -94,8 +94,8 @@ android {
         applicationId 'com.ODHPAY_PROJ.com'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10237
-        versionName "1.2.37"
+        versionCode 10239
+        versionName "1.2.39"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }

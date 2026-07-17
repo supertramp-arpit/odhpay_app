@@ -12,11 +12,10 @@ const PrivacyAndPolicy = () => {
       <ScrollView contentContainerStyle={styles.contentContainer}>
         <Text style={styles.boldText}>Introduction -</Text>
         <Text style={styles.paragraph}>
-          This Privacy Policy describes how (collectively " {Theme.Text.Company} LIFECARE
-          SERVICES PVT LTD {Theme.Text.Company} LIFECARE SERVICES PVT LTD and its affiliates ,
+          This Privacy Policy describes how Vyapaarlist Info India Private Limited(collectively "Vyapaarlist Info India Private Limited and its affiliates ,
           we, our, us") collect, use, share, protect or otherwise process your
           information/ personal data through our website
-          https://{Theme.Text.Company}digitalindia.com/ (hereinafter referred to as Platform ).
+          https://odhpay.com/ (hereinafter referred to as Platform ).
           Please note that you may be able to browse certain sections of the
           Platform without registering with us.We do not offer any
           product/service under this Platform outside India and your personal
@@ -56,7 +55,7 @@ const PrivacyAndPolicy = () => {
           you, you will be governed by their privacy policies. We shall not be
           responsible for the third-party business partner’s privacy practices
           or the content of their privacy policies, and we request you to read
-          their privacy policies prior to disclosing LIFECARE SERVICES PVT LTD
+          their privacy policies prior to disclosing Vyapaarlist Info India Private Limited
           any information. If you receive an email, a call from a
           person/association claiming to be {Theme.Text.Company} seeking any personal data like
           debit/credit card PIN, net-banking or mobile banking password, we
@@ -208,7 +207,7 @@ const PrivacyAndPolicy = () => {
           event, you may choose to reject the product at the doorstep.
         </Text>
         <Text style={styles.paragraph}>
-          2. {Theme.Text.Company} LIFECARE SERVICES PVT LTD does not accept cancellation requests
+          2. Vyapaarlist Info India Private Limited does not accept cancellation requests
           for perishable items like flowers, eatables, etc. However, the refund
           / replacement can be made if the user establishes that the quality of
           the product delivered is not good.
@@ -229,7 +228,7 @@ const PrivacyAndPolicy = () => {
           warranty from the manufacturers, please refer the issue to them.
         </Text>
         <Text style={styles.paragraph}>
-          5. In case of any refunds approved by {Theme.Text.Company} LIFECARE SERVICES PVT LTD
+          5. In case of any refunds approved by Vyapaarlist Info India Private Limited
           for the refund to be processed to you.
         </Text>
 
