@@ -441,7 +441,6 @@ const ProjectInvestment = () => {
             <ChevronLeft size={24} color={color.textInverse} />
           </TouchableOpacity>
           <Text style={styles.heroTitle}>Project Investment</Text>
-          <View style={styles.backBtn} />
         </View>
         <View style={styles.projectChip}>
           <Building2 size={12} color={PROMO.mint} strokeWidth={1.8} />
@@ -736,7 +735,7 @@ const styles = StyleSheet.create({
   heroNav: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: space.sm,
   },
   backBtn: {
     width: 40,
