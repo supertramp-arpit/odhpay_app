@@ -377,7 +377,7 @@ const Wallet = () => {
         >
           {bannerSize && (
             <Image
-              source={require("../assets/invest_banner_emerald2.png")}
+              source={require("../assets/invest_banner_coins.png")}
               style={{
                 position: "absolute",
                 top: 0,
