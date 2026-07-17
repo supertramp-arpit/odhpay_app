@@ -23,7 +23,6 @@ import {
   View,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import Svg, { Path } from "react-native-svg";
 import {
   Check,
   ChevronDown,
@@ -260,44 +259,6 @@ const AmountSlider = ({ amount, onChange }) => {
         <Text style={styles.sliderRangeText}>₹10 Cr</Text>
       </View>
     </View>
-  );
-};
-
-/* ---------------- growth curve (projection card art) ---------------- */
-
-const CURVE_W = 320;
-const CURVE_H = 72;
-
-const GrowthCurve = ({ years }) => {
-  const path = useMemo(() => {
-    const months = years * 12;
-    const growth = (t) => Math.pow(1 + APY / 100, t / 12);
-    const max = growth(months);
-    const pts = [];
-    for (let m = 0; m <= months; m += Math.max(1, Math.floor(months / 24))) {
-      const x = (m / months) * CURVE_W;
-      const y = CURVE_H - ((growth(m) - 1) / (max - 1)) * (CURVE_H - 6) - 3;
-      pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
-    }
-    return `M${pts.join(" L")}`;
-  }, [years]);
-
-  return (
-    <Svg
-      width="100%"
-      height={CURVE_H}
-      viewBox={`0 0 ${CURVE_W} ${CURVE_H}`}
-      style={styles.curveSvg}
-      pointerEvents="none"
-      aria-hidden
-    >
-      <Path
-        d={`${path} L${CURVE_W},${CURVE_H} L0,${CURVE_H} Z`}
-        fill={PROMO.gold}
-        opacity={0.07}
-      />
-      <Path d={path} stroke={PROMO.gold} strokeWidth={1.5} opacity={0.5} fill="none" />
-    </Svg>
   );
 };
 
@@ -540,7 +501,6 @@ const ProjectInvestment = () => {
 
         {/* Projection card */}
         <View style={styles.projectionCard}>
-          <GrowthCurve years={tenure.years} />
           <Text style={styles.projectionLabel}>
             {monthlyPayout ? "Capital back on maturity" : "On maturity, you'd get"}
           </Text>
@@ -910,7 +870,6 @@ const styles = StyleSheet.create({
     marginTop: space.base,
     overflow: "hidden",
   },
-  curveSvg: { position: "absolute", left: 0, right: 0, bottom: 0 },
   projectionLabel: {
     ...type.bodySm,
     color: PROMO.mint,
