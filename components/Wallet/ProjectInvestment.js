@@ -25,8 +25,6 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import Svg, { Path } from "react-native-svg";
 import {
-  BadgeCheck,
-  Building2,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -442,12 +440,8 @@ const ProjectInvestment = () => {
           </TouchableOpacity>
           <Text style={styles.heroTitle}>Project Investment</Text>
         </View>
-        <View style={styles.projectChip}>
-          <Building2 size={12} color={PROMO.mint} strokeWidth={1.8} />
-          <Text style={styles.projectChipText}>ODH Pay project</Text>
-          <BadgeCheck size={12} color={PROMO.mint} strokeWidth={1.8} />
-        </View>
-
+        {/* Amount plate — gives the stage content a surface instead of a void */}
+        <View style={styles.stagePlate}>
         <Text style={styles.stageLabel}>Investment amount</Text>
         <View style={styles.stageAmountRow}>
           <Text style={styles.stageRupee}>₹</Text>
@@ -485,6 +479,7 @@ const ProjectInvestment = () => {
         )}
 
         <AmountSlider amount={amount} onChange={setAmountEverywhere} />
+        </View>
 
         <TouchableOpacity
           style={styles.apyInline}
@@ -747,20 +742,12 @@ const styles = StyleSheet.create({
     ...type.h3,
     color: color.textInverse,
   },
-  projectChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "center",
-    gap: space.xs,
-    marginTop: space.sm,
-    paddingHorizontal: space.md,
-    paddingVertical: space.xs + 2,
-    borderRadius: radius.pill,
-    backgroundColor: "rgba(255,255,255,0.07)",
-  },
-  projectChipText: {
-    ...type.caption,
-    color: color.textInverse,
+  stagePlate: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: radius.xl,
+    paddingVertical: space.lg,
+    paddingHorizontal: space.lg,
+    marginTop: space.md,
   },
   stageLabel: {
     ...type.micro,
@@ -768,27 +755,28 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.8,
     textAlign: "center",
-    marginTop: space.xl,
   },
   stageAmountRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: space.sm,
-    marginTop: space.xs,
+    gap: space.xs,
+    marginTop: space.sm,
   },
   stageRupee: {
-    ...type.h1,
+    ...type.display,
     ...tabularNums,
-    color: "rgba(255,255,255,0.6)",
+    color: "rgba(255,255,255,0.55)",
+    includeFontPadding: false,
   },
   stageInput: {
     ...type.display,
     ...tabularNums,
     color: color.textInverse,
     textAlign: "center",
-    minWidth: 150,
-    paddingVertical: space.xs,
+    minWidth: 90,
+    padding: 0,
+    includeFontPadding: false,
   },
   stageWords: {
     ...type.bodySm,
@@ -846,16 +834,16 @@ const styles = StyleSheet.create({
   sliderHitArea: {
     height: 44,
     justifyContent: "center",
-    marginTop: space.md,
+    marginTop: space.base,
   },
   sliderTrack: {
-    height: 6,
+    height: 8,
     borderRadius: radius.pill,
-    backgroundColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "rgba(255,255,255,0.14)",
     overflow: "hidden",
   },
   sliderFill: {
-    height: 6,
+    height: 8,
     borderRadius: radius.pill,
     backgroundColor: PROMO.gold,
   },
@@ -894,14 +882,12 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingVertical: space.md,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: color.border,
+    backgroundColor: color.surfaceMuted,
     alignItems: "center",
     justifyContent: "center",
   },
   tenureChipActive: {
     backgroundColor: color.ink900,
-    borderColor: color.ink900,
   },
   tenureChipText: { ...type.buttonSm, color: color.textSecondary },
   tenureChipTextActive: { color: color.textInverse },
