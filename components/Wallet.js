@@ -637,9 +637,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // Investment banner — text column left, generated art fills the right zone
+  // Investment banner — full-bleed emerald art, text column left.
+  // Promo-only palette: deep green sampled from the artwork; green = the app's
+  // money/growth semantic, gold lives only inside the generated image.
   investBanner: {
-    backgroundColor: color.ink900,
+    backgroundColor: "#000F0B",
     borderRadius: radius.lg,
     padding: space.lg,
     marginBottom: 16,
@@ -647,18 +649,14 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   investArt: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    width: "48%",
+    ...StyleSheet.absoluteFillObject,
   },
   investBody: {
     width: "58%",
   },
   investKicker: {
     ...type.micro,
-    color: color.gray500,
+    color: "#8CE0BE",
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
@@ -671,7 +669,7 @@ const styles = StyleSheet.create({
   investSub: {
     ...type.caption,
     ...tabularNums,
-    color: color.gray400,
+    color: "rgba(255,255,255,0.75)",
     marginTop: space.xxs,
   },
   investPill: {
@@ -685,7 +683,7 @@ const styles = StyleSheet.create({
   },
   investPillText: {
     ...type.buttonSm,
-    color: color.ink900,
+    color: color.successFg,
   },
 
   // Filters
