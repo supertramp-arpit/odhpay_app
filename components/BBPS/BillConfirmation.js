@@ -36,6 +36,11 @@ const BillConfirmation = () => {
     infoData = {}
   } = route.params || {};
 
+  // Must be declared with the other hooks, BEFORE the `if (!data) return` below —
+  // a useState after a conditional return violates the Rules of Hooks and can
+  // crash the screen.
+  const [paymentLoading, setPaymentLoading] = useState(false);
+
   useEffect(() => {
     navigation.setOptions({
       title: tagName || billerCategory || "Pay Bill",
@@ -84,8 +89,6 @@ const BillConfirmation = () => {
     billPeriod: data?.bill_period || "N/A",
     referenceNo: data?.reference_no || "N/A",
   };
-
-  const [paymentLoading, setPaymentLoading] = useState(false);
 
   const handleProceed = async () => {
     const finalAmount = billDetails.totalAmount;

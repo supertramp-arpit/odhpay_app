@@ -41,9 +41,16 @@ const BillFetch = () => {
   } = route.params || {};
 
 
-  const additionalInfoList = data?.additional_info?.info || [];
-  console.log("BillFetch - additionalInfoList:", additionalInfoList);
-  console.log("BillFetch - infoData:", infoData);
+  // additionalInfo.info comes from BillAvenue XML -> JSON: a SINGLE <info> element
+  // decodes to an object, MULTIPLE to an array. Normalize to an array so the
+  // `.map` below never runs on a non-array (was crashing the app on billers that
+  // return one additionalInfo item, e.g. electricity "ConnectionType").
+  const rawAdditionalInfo = data?.additional_info?.info;
+  const additionalInfoList = Array.isArray(rawAdditionalInfo)
+    ? rawAdditionalInfo
+    : rawAdditionalInfo
+      ? [rawAdditionalInfo]
+      : [];
 
 
   const amounts = ["500", "1000", "2000", "3000"];
