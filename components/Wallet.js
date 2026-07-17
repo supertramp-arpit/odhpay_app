@@ -368,7 +368,7 @@ const Wallet = () => {
           accessibilityLabel="Project Investment. Grow at 7.5 percent per annum, starting from ten thousand rupees. Open"
         >
           <Image
-            source={require("../assets/invest-banner.png")}
+            source={require("../assets/invest_banner_emerald.png")}
             style={styles.investArt}
             resizeMode="cover"
             accessible={false}
