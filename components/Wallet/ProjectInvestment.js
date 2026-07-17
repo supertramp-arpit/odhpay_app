@@ -45,6 +45,14 @@ import {
 import { formatINR } from "../../utils/helper";
 
 const APY = 7.5; // % p.a. — indicative, single source for every figure on screen
+
+// Investment promo palette — shared visual language with the wallet banner
+// (emerald ground + gold growth accents; contained to this feature only)
+const PROMO = {
+  deepGreen: "#03170F",
+  mint: "#8CE0BE",
+  gold: "#F5B63F",
+};
 const MIN_AMOUNT = 10000;
 const MAX_AMOUNT = 100000000; // ₹10 Cr
 const TENURES = [
@@ -287,10 +295,10 @@ const GrowthCurve = ({ years }) => {
     >
       <Path
         d={`${path} L${CURVE_W},${CURVE_H} L0,${CURVE_H} Z`}
-        fill={color.white}
-        opacity={0.05}
+        fill={PROMO.gold}
+        opacity={0.07}
       />
-      <Path d={path} stroke={color.white} strokeWidth={1.5} opacity={0.28} fill="none" />
+      <Path d={path} stroke={PROMO.gold} strokeWidth={1.5} opacity={0.5} fill="none" />
     </Svg>
   );
 };
@@ -373,6 +381,7 @@ const ProjectInvestment = () => {
   const [payout, setPayout] = useState(PAYOUT_OPTIONS[0]);
   const [sheet, setSheet] = useState(null); // 'reinvest' | 'payout' | 'apy' | 'review'
   const [reviewNoticed, setReviewNoticed] = useState(false);
+  const [amountFocused, setAmountFocused] = useState(false);
 
   const monthlyPayout = payout === "Monthly payout";
 
@@ -421,6 +430,27 @@ const ProjectInvestment = () => {
 
       {/* Ink hero — the app's root SafeAreaView already consumes the status-bar inset */}
       <View style={[styles.hero, { paddingTop: space.md }]}>
+        <Svg
+          style={styles.heroArc}
+          width="100%"
+          height={90}
+          viewBox="0 0 360 90"
+          preserveAspectRatio="none"
+          pointerEvents="none"
+        >
+          <Path
+            d="M-10,96 C90,88 200,62 252,42 C292,27 332,12 372,0 L372,96 Z"
+            fill={PROMO.gold}
+            opacity={0.06}
+          />
+          <Path
+            d="M-10,96 C90,88 200,62 252,42 C292,27 332,12 372,0"
+            stroke={PROMO.gold}
+            strokeWidth={2}
+            opacity={0.45}
+            fill="none"
+          />
+        </Svg>
         <View style={styles.heroNav}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -481,9 +511,19 @@ const ProjectInvestment = () => {
             <Text style={styles.amountRupee}>₹</Text>
             <TextInput
               style={styles.amountInput}
-              value={amountText}
+              value={
+                amountFocused
+                  ? amountText
+                  : amountText
+                    ? Number(amountText).toLocaleString("en-IN")
+                    : ""
+              }
               onChangeText={onInputChange}
-              onBlur={onInputBlur}
+              onFocus={() => setAmountFocused(true)}
+              onBlur={() => {
+                setAmountFocused(false);
+                onInputBlur();
+              }}
               keyboardType="number-pad"
               returnKeyType="done"
               accessibilityLabel="Investment amount in rupees"
@@ -727,9 +767,16 @@ const styles = StyleSheet.create({
   hero: {
     backgroundColor: color.ink900,
     paddingHorizontal: space.lg,
-    paddingBottom: space.xxl + space.lg,
+    paddingBottom: space.xxl,
     borderBottomLeftRadius: radius.xxl,
     borderBottomRightRadius: radius.xxl,
+    overflow: "hidden",
+  },
+  heroArc: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   heroNav: {
     flexDirection: "row",
@@ -763,12 +810,12 @@ const styles = StyleSheet.create({
     paddingVertical: space.sm,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: color.ink600,
+    borderColor: "rgba(245,182,63,0.4)",
   },
   apyPillText: {
     ...type.label,
     ...tabularNums,
-    color: color.textInverse,
+    color: PROMO.gold,
   },
   apyPillMuted: { color: color.gray400, fontWeight: "400" },
 
@@ -780,7 +827,9 @@ const styles = StyleSheet.create({
     backgroundColor: color.surface,
     borderRadius: radius.lg,
     padding: space.lg,
-    marginTop: -space.xxl,
+    // Overlap must stay smaller than the card padding or the first field label
+    // slides under the hero's black curve
+    marginTop: -space.base,
     borderWidth: 1,
     borderColor: color.border,
     ...elevation.level2,
@@ -924,9 +973,9 @@ const styles = StyleSheet.create({
   selectRowBody: { flex: 1, marginRight: space.md },
   selectRowValue: { ...type.bodyLg, color: color.text },
 
-  /* projection card */
+  /* projection card — emerald wealth card, mirrors the wallet banner */
   projectionCard: {
-    backgroundColor: color.ink900,
+    backgroundColor: PROMO.deepGreen,
     borderRadius: radius.lg,
     padding: space.lg,
     marginTop: space.base,
@@ -935,7 +984,7 @@ const styles = StyleSheet.create({
   curveSvg: { position: "absolute", left: 0, right: 0, bottom: 0 },
   projectionLabel: {
     ...type.bodySm,
-    color: color.gray400,
+    color: PROMO.mint,
     textAlign: "center",
   },
   projectionValue: {
@@ -951,16 +1000,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: space.xs,
     borderRadius: radius.pill,
-    backgroundColor: color.ink700,
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   monthlyPillText: {
     ...type.bodySm,
     ...tabularNums,
-    color: color.gray300,
+    color: "rgba(255,255,255,0.85)",
   },
   projectionDivider: {
     height: 1,
-    backgroundColor: color.ink700,
+    backgroundColor: "rgba(255,255,255,0.10)",
     marginVertical: space.lg,
   },
   projectionGrid: {
@@ -972,7 +1021,7 @@ const styles = StyleSheet.create({
   projectionCellRight: { alignItems: "flex-end" },
   projectionCellLabel: {
     ...type.micro,
-    color: color.gray500,
+    color: "rgba(255,255,255,0.55)",
     textTransform: "uppercase",
     letterSpacing: 0.8,
     marginBottom: space.xxs,
@@ -982,10 +1031,10 @@ const styles = StyleSheet.create({
     ...tabularNums,
     color: color.textInverse,
   },
-  projectionReturns: { color: color.success },
+  projectionReturns: { color: PROMO.gold },
   projectionNote: {
     ...type.caption,
-    color: color.gray500,
+    color: "rgba(255,255,255,0.45)",
     textAlign: "center",
     marginTop: space.lg,
   },
