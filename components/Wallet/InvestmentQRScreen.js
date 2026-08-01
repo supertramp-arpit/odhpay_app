@@ -19,7 +19,7 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import QRCode from "react-native-qrcode-svg";
-import { CheckCircle2, ChevronLeft, Info, XCircle } from "lucide-react-native";
+import { CheckCircle2, ChevronLeft, FileDown, Info, XCircle } from "lucide-react-native";
 import {
   color,
   space,
@@ -30,6 +30,7 @@ import {
   hitSlop8,
 } from "../../theme/tokens";
 import { formatINR } from "../../utils/helper";
+import { downloadInvestmentCertificate } from "../../utils/certificate";
 
 const BASE_URL = "https://newapi.odhpay.com";
 
@@ -74,7 +75,20 @@ const InvestmentQRScreen = () => {
 
   const [phase, setPhase] = useState("paying"); // paying | success | failed
   const [statusData, setStatusData] = useState(null);
+  const [certBusy, setCertBusy] = useState(false);
   const pollRef = useRef(null);
+
+  const onDownloadCertificate = async () => {
+    if (certBusy) return;
+    setCertBusy(true);
+    try {
+      await downloadInvestmentCertificate(referenceId);
+    } catch (e) {
+      Alert.alert("Certificate", e?.message || "Download failed — try again");
+    } finally {
+      setCertBusy(false);
+    }
+  };
 
   const amount = Number(invest?.amount || 0);
   const qrString = invest?.qr?.qr_string || null;
@@ -265,6 +279,22 @@ const InvestmentQRScreen = () => {
                 </View>
               ))}
             </View>
+
+            <TouchableOpacity
+              style={styles.certBtn}
+              onPress={onDownloadCertificate}
+              disabled={certBusy}
+              accessibilityRole="button"
+              accessibilityLabel="Download investment certificate PDF"
+              accessibilityState={{ busy: certBusy }}
+            >
+              {certBusy ? (
+                <ActivityIndicator size="small" color={color.text} />
+              ) : (
+                <FileDown size={18} color={color.text} strokeWidth={1.8} />
+              )}
+              <Text style={styles.certBtnText}>Download certificate (PDF)</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.primaryBtn}
@@ -492,13 +522,26 @@ const styles = StyleSheet.create({
     marginTop: space.sm,
   },
 
+  certBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: space.sm,
+    height: 52,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: color.borderStrong,
+    backgroundColor: color.surface,
+    marginTop: space.xl,
+  },
+  certBtnText: { ...type.buttonSm, color: color.text },
   primaryBtn: {
     height: 52,
     borderRadius: radius.pill,
     backgroundColor: color.ink900,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: space.xl,
+    marginTop: space.md,
   },
   primaryBtnText: { ...type.button, color: color.textInverse },
 

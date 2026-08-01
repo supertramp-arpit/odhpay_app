@@ -14,6 +14,7 @@ import React, {
 import {
   AccessibilityInfo,
   ActivityIndicator,
+  Alert,
   Modal,
   PanResponder,
   Pressable,
@@ -33,6 +34,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
+  FileDown,
   Info,
   QrCode,
   Wallet as WalletIcon,
@@ -48,6 +50,7 @@ import {
   hitSlop8,
 } from "../../theme/tokens";
 import { formatINR } from "../../utils/helper";
+import { downloadInvestmentCertificate } from "../../utils/certificate";
 import { getIntegrityToken } from "../../utils/integrity";
 import { useWalletStore } from "../../store";
 
@@ -386,6 +389,19 @@ const ProjectInvestment = () => {
   const [pinText, setPinText] = useState("");
   const [walletAvailable, setWalletAvailable] = useState(null);
   const [investResult, setInvestResult] = useState(null);
+  const [certBusy, setCertBusy] = useState(false);
+
+  const onDownloadCertificate = async () => {
+    if (certBusy || !investResult?.reference_id) return;
+    setCertBusy(true);
+    try {
+      await downloadInvestmentCertificate(investResult.reference_id);
+    } catch (e) {
+      Alert.alert("Certificate", e?.message || "Download failed — try again");
+    } finally {
+      setCertBusy(false);
+    }
+  };
 
   const loadPlan = useCallback(async () => {
     setPlanLoading(true);
@@ -1039,6 +1055,21 @@ const ProjectInvestment = () => {
                   </View>
                 ))}
                 <TouchableOpacity
+                  style={styles.certBtn}
+                  onPress={onDownloadCertificate}
+                  disabled={certBusy}
+                  accessibilityRole="button"
+                  accessibilityLabel="Download investment certificate PDF"
+                  accessibilityState={{ busy: certBusy }}
+                >
+                  {certBusy ? (
+                    <ActivityIndicator size="small" color={color.text} />
+                  ) : (
+                    <FileDown size={18} color={color.text} strokeWidth={1.8} />
+                  )}
+                  <Text style={styles.certBtnText}>Download certificate (PDF)</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
                   style={styles.sheetPrimaryBtn}
                   onPress={() => {
                     setSheet(null);
@@ -1425,13 +1456,26 @@ const styles = StyleSheet.create({
   },
   sheetOptionText: { ...type.bodyLg, color: color.textSecondary, flex: 1 },
   sheetOptionTextActive: { color: color.text, fontWeight: "600" },
+  certBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: space.sm,
+    height: 52,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: color.borderStrong,
+    backgroundColor: color.surface,
+    marginTop: space.lg,
+  },
+  certBtnText: { ...type.buttonSm, color: color.text },
   sheetPrimaryBtn: {
     height: 52,
     borderRadius: radius.pill,
     backgroundColor: color.ink900,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: space.lg,
+    marginTop: space.md,
   },
   sheetPrimaryBtnText: { ...type.button, color: color.textInverse },
   sheetGhostBtn: {
