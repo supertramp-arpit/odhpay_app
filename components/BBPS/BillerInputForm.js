@@ -64,6 +64,7 @@ const VehicleRegistration = () => {
     shouldNaviagteToManualInput = false,
     doesSupportEnterBillAmount = false,
     doesSupportUserInput = false,
+    doesSupportBillFetch = true,
     isEnterBillAmountMandatory = false,
     paymentChannels = [],
     allDiscomsList = [],
@@ -146,6 +147,31 @@ const VehicleRegistration = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasDiscomField]);
 
+  // Some billers (all DTH incl. TATA Play, and ~137 others) have
+  // billerFetchRequirement = NOT_SUPPORTED — BillAvenue rejects a fetch with
+  // "Fetch Request not supported, only QuickPay permitted". For those we skip the
+  // fetch and send the user straight to amount entry (QuickPay).
+  const isQuickPayOnlyMessage = (msg = "") =>
+    /quick\s*pay/i.test(msg) || /fetch\s*(request)?\s*(is\s*)?not\s*support/i.test(msg);
+
+  const goToQuickPay = (urlData) => {
+    setLoading(false);
+    navigation.navigate("EnterBillAmount", {
+      data: {}, // no bill fetched — the user enters the amount
+      paymentBnak,
+      tagName,
+      IsAmountEditable: true,
+      biller_id,
+      urlData,
+      billerfetchId: "",
+      iconImage,
+      billerCategory,
+      billerName,
+      paymentChannels,
+      infoData: {},
+    });
+  };
+
   const handleSubmit = async () => {
     let newErrors = {};
 
@@ -193,6 +219,12 @@ const VehicleRegistration = () => {
 
     setErrors(newErrors);
 
+    // QuickPay-only biller: don't call bill/fetch at all, go straight to payment.
+    if (doesSupportBillFetch === false) {
+      logBBPSFlow("FETCH_BILL", { biller_id, skipped: "biller does not support fetch (QuickPay only)" });
+      goToQuickPay(urlData);
+      return;
+    }
 
     try {
       setLoading(true);
@@ -249,6 +281,10 @@ const VehicleRegistration = () => {
           response?.data?.message ||
           "Unable to fetch bill. Please check the details and try again.";
         console.log("Bill fetch failed:", failMessage);
+        if (isQuickPayOnlyMessage(failMessage)) {
+          goToQuickPay(urlData);
+          return;
+        }
         setAlertMessage(failMessage);
         setMessageType("error");
         setMessageTitle("Bill Fetch Failed");
@@ -323,6 +359,10 @@ const VehicleRegistration = () => {
             : "Unable to fetch bill. Please check the details and try again.");
       } else {
         console.error("Unexpected Error:", error);
+      }
+      if (isQuickPayOnlyMessage(failMessage)) {
+        goToQuickPay(urlData);
+        return;
       }
       // Always surface failures as an error modal (consistent with the success path).
       setAlertMessage(failMessage);

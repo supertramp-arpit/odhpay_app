@@ -249,8 +249,12 @@ const BillFetch = () => {
   }, [amount, minAmount, maxAmount, isCreditCard]);
 
   useEffect(() => {
-    if (resolvedAmount !== undefined && resolvedAmount !== null) {
+    // Prefill only when a bill was actually fetched. QuickPay billers (no fetch)
+    // start empty so the user can type the amount instead of clearing a "0".
+    if (hasBillAmount && resolvedAmount !== undefined && resolvedAmount !== null) {
       setAmount(String(resolvedAmount));
+    } else if (!hasBillAmount) {
+      setAmount("");
     }
   }, []);
 
