@@ -9,6 +9,7 @@ import axios from "axios";
 import Theme from "../Theme";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { normalizeIndianMobile } from "../../utils/helper";
+import { integrityHeaders } from "../../utils/secureRequest";
 
 // Operator logos shipped locally — used for the header chip. Falls back to the
 // brand-coloured circle below if none matches.
@@ -150,6 +151,10 @@ const RechargeTrxPin = () => {
         Accept: "application/json",
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
+        // /wallet/pay-service is guarded by require_fresh_integrity — without
+        // these it returns 422 MISSING_INTEGRITY_HEADERS once the per-request
+        // check is enforced.
+        ...(await integrityHeaders()),
       };
 
       const payload = {

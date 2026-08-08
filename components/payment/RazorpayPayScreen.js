@@ -18,7 +18,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRegisterStore } from "../../store";
-import { getIntegrityToken } from "../utils/integrity";
+import { getIntegrityToken } from "../../utils/integrity";
 
 
 const { width, height } = Dimensions.get("window");

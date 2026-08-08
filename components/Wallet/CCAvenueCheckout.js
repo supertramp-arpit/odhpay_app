@@ -1,0 +1,526 @@
+// components/Wallet/CCAvenueCheckout.js
+//
+// CCAvenue add-money checkout.
+//
+// The WebView is never the source of truth. It only tells us the flow ENDED; the
+// outcome always comes from GET /payments/ccavenue/status/{order_id}, which the
+// backend has verified against the encrypted gateway response. This is deliberate:
+// the CCAvenue Android sample scrapes the result page's HTML for the words
+// "Success"/"Failure", which is trivially spoofable.
+//
+// Backend: odhpaybackend/app/api/ccavenue.py
+// Design:  .claude/skills/odhpay-ui-ux/references/design-system.md
+
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  BackHandler,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { WebView } from "react-native-webview";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import {
+  CheckCircle2,
+  Clock,
+  Lock,
+  X,
+  XCircle,
+} from "lucide-react-native";
+
+import { color, elevation, hitSlop8, radius, space, tabularNums, type } from "../../theme/tokens";
+import { formatINR } from "../../utils/helper";
+import { ensureDeviceVerified, signedPost } from "../../utils/secureRequest";
+
+const BASE_URL = "https://newapi.odhpay.com";
+const CCAV = `${BASE_URL}/api/v1/payments/ccavenue`;
+
+// The terminal marker our backend redirects to. Matching on the path (not on page
+// text) is what keeps this un-spoofable.
+const DONE_PATH = "/api/v1/payments/ccavenue/done";
+
+// Status polling. The gateway's response can land a moment after the browser
+// returns, so we keep asking rather than trusting the first answer.
+const POLL_DELAYS_MS = [600, 900, 1200, 1500, 2000, 2000, 3000, 3000, 4000, 4000, 5000, 5000];
+
+const PHASE = {
+  CREATING: "creating",
+  PAYING: "paying",
+  VERIFYING: "verifying",
+  RESULT: "result",
+};
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Auto-submitting form. JSON.stringify quotes the attribute AND escapes the
+ *  payload, so the hex enc_request can never break out of the HTML. */
+const buildFormHTML = (transactionUrl, accessCode, encRequest) => `<!doctype html>
+<html><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/></head>
+<body style="margin:0;background:#F7F8FA">
+  <form id="ccav" method="POST" action=${JSON.stringify(transactionUrl)}>
+    <input type="hidden" name="access_code"  value=${JSON.stringify(accessCode)} />
+    <input type="hidden" name="encRequest"   value=${JSON.stringify(encRequest)} />
+  </form>
+  <script>document.getElementById('ccav').submit();</script>
+</body></html>`;
+
+export default function CCAvenueCheckout({ visible, amount, onClose, onResult }) {
+  const [phase, setPhase] = useState(PHASE.CREATING);
+  const [order, setOrder] = useState(null);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+
+  // Guards against the WebView firing navigation events more than once.
+  const handledRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  const authHeaders = useCallback(async () => {
+    const token = await AsyncStorage.getItem("access_token");
+    return { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  }, []);
+
+  // ---------------------------------------------------------------- create
+  const createOrder = useCallback(async () => {
+    setPhase(PHASE.CREATING);
+    setError(null);
+    setResult(null);
+    handledRef.current = false;
+    try {
+      // Gate 1: attest the app + device before we mint a payment session.
+      // /order requires authenticate_verified_device and returns 403
+      // DEVICE_NOT_VERIFIED until this succeeds.
+      const verified = await ensureDeviceVerified();
+      if (!mountedRef.current) return;
+      if (!verified.ok) {
+        setError(verified.message || "We couldn't verify this device.");
+        setPhase(PHASE.RESULT);
+        return;
+      }
+
+      // Gate 2: signed request (timestamp + single-use nonce + body HMAC).
+      const { data } = await signedPost("/api/v1/payments/ccavenue/order", {
+        amount: String(amount),
+        purpose: "wallet_topup",
+      });
+      if (!mountedRef.current) return;
+      setOrder(data);
+      setPhase(PHASE.PAYING);
+    } catch (e) {
+      if (!mountedRef.current) return;
+      const detail = e?.response?.data?.detail;
+      const message =
+        typeof detail === "string"
+          ? detail
+          : detail?.message ||
+            "We couldn't start this payment. Please try again.";
+      setError(message);
+      setPhase(PHASE.RESULT);
+    }
+  }, [amount]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    if (visible) createOrder();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [visible, createOrder]);
+
+  // ---------------------------------------------------------------- verify
+  const pollStatus = useCallback(
+    async (orderId) => {
+      setPhase(PHASE.VERIFYING);
+      const headers = await authHeaders();
+
+      for (let i = 0; i < POLL_DELAYS_MS.length; i += 1) {
+        await sleep(POLL_DELAYS_MS[i]);
+        if (!mountedRef.current) return;
+        try {
+          const { data } = await axios.get(`${CCAV}/status/${orderId}`, {
+            headers,
+            timeout: 15000,
+          });
+          if (!mountedRef.current) return;
+          if (data?.is_final) {
+            setResult(data);
+            setPhase(PHASE.RESULT);
+            onResult?.(data);
+            return;
+          }
+        } catch {
+          // Transient — keep polling. A network blip is not an outcome.
+        }
+      }
+
+      // Ran out of attempts. This is NOT a failure: the payment may still settle.
+      // Say so honestly rather than inventing a verdict.
+      if (!mountedRef.current) return;
+      setResult({ status: "AWAITING_VERIFICATION", credited: false, is_final: false });
+      setPhase(PHASE.RESULT);
+      onResult?.({ status: "AWAITING_VERIFICATION", credited: false });
+    },
+    [authHeaders, onResult]
+  );
+
+  const handleNavChange = useCallback(
+    (nav) => {
+      const url = nav?.url || "";
+      if (!url || handledRef.current) return;
+      if (url.includes(DONE_PATH)) {
+        handledRef.current = true;
+        pollStatus(order?.order_id);
+      }
+    },
+    [order?.order_id, pollStatus]
+  );
+
+  // Dismissing mid-flow must still verify — the payment may have gone through.
+  const dismiss = useCallback(() => {
+    if (phase === PHASE.PAYING && order?.order_id && !handledRef.current) {
+      handledRef.current = true;
+      pollStatus(order.order_id);
+      return;
+    }
+    onClose?.();
+  }, [phase, order?.order_id, pollStatus, onClose]);
+
+  useEffect(() => {
+    if (!visible) return undefined;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      dismiss();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible, dismiss]);
+
+  // ---------------------------------------------------------------- render
+  const renderHeader = (title, canClose = true) => (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle} numberOfLines={1}>
+        {title}
+      </Text>
+      {canClose ? (
+        <TouchableOpacity
+          onPress={dismiss}
+          style={styles.headerClose}
+          hitSlop={hitSlop8}
+          accessibilityRole="button"
+          accessibilityLabel="Close payment"
+        >
+          <X size={22} color={color.text} strokeWidth={1.75} />
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.headerClose} />
+      )}
+    </View>
+  );
+
+  const renderBusy = (title, caption) => (
+    <View style={styles.centered}>
+      <ActivityIndicator size="large" color={color.ink900} />
+      <Text style={styles.busyTitle}>{title}</Text>
+      <Text style={styles.busyCaption}>{caption}</Text>
+      <View style={styles.amountPill}>
+        <Text style={styles.amountPillText}>{formatINR(amount)}</Text>
+      </View>
+    </View>
+  );
+
+  const renderResult = () => {
+    const status = result?.status;
+    const failed = !!error || status === "FAILED";
+    const aborted = status === "ABORTED";
+    const success = status === "SUCCESS";
+
+    let Icon = Clock;
+    let iconColor = color.warningFg;
+    let iconBg = color.warningBg;
+    let title = "Payment is still processing";
+    let body =
+      "We haven't had final confirmation from the bank yet. If money was debited it will be added automatically — no need to pay again.";
+
+    if (success) {
+      Icon = CheckCircle2;
+      iconColor = color.successFg;
+      iconBg = color.successBg;
+      title = "Money added";
+      body = result?.wallet_balance
+        ? `Your wallet balance is now ${formatINR(result.wallet_balance)}.`
+        : "Your wallet has been updated.";
+    } else if (failed) {
+      Icon = XCircle;
+      iconColor = color.errorFg;
+      iconBg = color.errorBg;
+      title = error ? "Couldn't start payment" : "Payment failed";
+      body =
+        error ||
+        result?.failure_message ||
+        "The payment didn't go through. You haven't been charged.";
+    } else if (aborted) {
+      Icon = XCircle;
+      iconColor = color.textSecondary;
+      iconBg = color.surfaceMuted;
+      title = "Payment cancelled";
+      body = "You cancelled this payment. Nothing has been charged.";
+    }
+
+    return (
+      <View style={styles.centered}>
+        <View style={[styles.resultIcon, { backgroundColor: iconBg }]}>
+          <Icon size={32} color={iconColor} strokeWidth={1.75} />
+        </View>
+
+        <Text style={styles.resultTitle}>{title}</Text>
+        <Text style={styles.resultBody}>{body}</Text>
+
+        {success ? (
+          <Text style={styles.resultAmount} accessibilityLabel={`Added ${formatINR(amount)}`}>
+            {formatINR(result?.paid_amount ?? amount)}
+          </Text>
+        ) : null}
+
+        {result?.bank_ref_no ? (
+          <View style={styles.refRow}>
+            <Text style={styles.refLabel}>Bank ref</Text>
+            <Text style={styles.refValue}>{result.bank_ref_no}</Text>
+          </View>
+        ) : null}
+
+        <View style={styles.actions}>
+          {failed && !error ? (
+            <TouchableOpacity
+              style={styles.secondaryBtn}
+              onPress={createOrder}
+              accessibilityRole="button"
+              accessibilityLabel="Try payment again"
+            >
+              <Text style={styles.secondaryBtnText}>Try again</Text>
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Done"
+          >
+            <Text style={styles.primaryBtnText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      onRequestClose={dismiss}
+      presentationStyle="fullScreen"
+    >
+      <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
+        {phase === PHASE.CREATING ? (
+          <>
+            {renderHeader("Add money")}
+            {renderBusy("Setting up payment", "Connecting securely to the payment gateway")}
+          </>
+        ) : null}
+
+        {phase === PHASE.PAYING && order ? (
+          <>
+            {renderHeader("Secure payment")}
+            <View style={styles.secureStrip}>
+              <Lock size={14} color={color.textSecondary} strokeWidth={1.75} />
+              <Text style={styles.secureText}>
+                Paying {formatINR(amount)} via CCAvenue
+              </Text>
+            </View>
+            <WebView
+              style={styles.webview}
+              originWhitelist={["https://*", "upi://*"]}
+              source={{
+                html: buildFormHTML(
+                  order.transaction_url,
+                  order.access_code,
+                  order.enc_request
+                ),
+              }}
+              onNavigationStateChange={handleNavChange}
+              javaScriptEnabled
+              domStorageEnabled
+              startInLoadingState
+              setSupportMultipleWindows={false}
+              renderLoading={() => (
+                <View style={styles.webviewLoader}>
+                  <ActivityIndicator size="large" color={color.ink900} />
+                </View>
+              )}
+              // UPI intent links must leave the WebView or the UPI app never opens.
+              onShouldStartLoadWithRequest={(req) => {
+                const url = req?.url ?? "";
+                if (url.startsWith("upi://") || url.startsWith("intent://")) {
+                  return false;
+                }
+                return true;
+              }}
+            />
+          </>
+        ) : null}
+
+        {phase === PHASE.VERIFYING ? (
+          <>
+            {renderHeader("Confirming", false)}
+            {renderBusy(
+              "Confirming your payment",
+              "Checking with your bank. Please don't close the app."
+            )}
+          </>
+        ) : null}
+
+        {phase === PHASE.RESULT ? (
+          <>
+            {renderHeader("Add money")}
+            {renderResult()}
+          </>
+        ) : null}
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: color.background },
+
+  header: {
+    height: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: space.lg,
+    backgroundColor: color.surface,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: color.border,
+  },
+  headerTitle: { ...type.h3, color: color.text, flex: 1 },
+  headerClose: {
+    width: 44,
+    height: 44,
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
+
+  secureStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    backgroundColor: color.surfaceMuted,
+  },
+  secureText: { ...type.bodySm, ...tabularNums, color: color.textSecondary },
+
+  webview: { flex: 1, backgroundColor: color.background },
+  webviewLoader: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: color.background,
+  },
+
+  centered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: space.xl,
+  },
+  busyTitle: { ...type.h3, color: color.text, marginTop: space.lg, textAlign: "center" },
+  busyCaption: {
+    ...type.body,
+    color: color.textSecondary,
+    marginTop: space.sm,
+    textAlign: "center",
+  },
+  amountPill: {
+    marginTop: space.xl,
+    paddingHorizontal: space.base,
+    paddingVertical: space.sm,
+    borderRadius: radius.pill,
+    backgroundColor: color.surfaceMuted,
+  },
+  amountPillText: { ...type.label, ...tabularNums, color: color.text },
+
+  resultIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  resultTitle: {
+    ...type.h2,
+    color: color.text,
+    marginTop: space.lg,
+    textAlign: "center",
+  },
+  resultBody: {
+    ...type.body,
+    color: color.textSecondary,
+    marginTop: space.sm,
+    textAlign: "center",
+  },
+  resultAmount: {
+    ...type.display,
+    ...tabularNums,
+    color: color.moneyCredit,
+    marginTop: space.lg,
+  },
+
+  refRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+    marginTop: space.lg,
+    paddingHorizontal: space.base,
+    paddingVertical: space.sm,
+    borderRadius: radius.sm,
+    backgroundColor: color.surfaceMuted,
+  },
+  refLabel: { ...type.caption, color: color.textTertiary },
+  refValue: { ...type.caption, ...tabularNums, color: color.textSecondary },
+
+  actions: {
+    position: "absolute",
+    left: space.xl,
+    right: space.xl,
+    bottom: space.xl,
+    flexDirection: "row",
+    gap: space.md,
+  },
+  primaryBtn: {
+    flex: 1,
+    height: 52,
+    borderRadius: radius.md,
+    backgroundColor: color.ink900,
+    alignItems: "center",
+    justifyContent: "center",
+    ...(Platform.OS === "ios" ? elevation.level1 : null),
+  },
+  primaryBtnText: { ...type.button, color: color.textInverse },
+  secondaryBtn: {
+    flex: 1,
+    height: 52,
+    borderRadius: radius.md,
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.borderStrong,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondaryBtnText: { ...type.button, color: color.text },
+});

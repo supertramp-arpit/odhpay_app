@@ -21,6 +21,7 @@ import {
   ArrowUpRight,
   AtSign,
   Award,
+  CreditCard,
   Eye,
   EyeOff,
   Inbox,
@@ -47,6 +48,7 @@ import {
 import { formatINR } from "../utils/helper";
 import { useWalletStore, useUserStore } from "../store";
 import { ActivityIndicator } from "react-native";
+import CCAvenueCheckout from "./Wallet/CCAvenueCheckout";
 
 const { width, height } = Dimensions.get("window");
 
@@ -130,7 +132,7 @@ const TransactionItem = ({ transaction, index }) => {
 };
 
 // Add Money Modal
-const AddMoneyModal = ({ visible, onClose, onSubmit, loading }) => {
+const AddMoneyModal = ({ visible, onClose, onSubmit, onCardPay, loading }) => {
   const [vpa, setVpa] = useState("");
   const [amount, setAmount] = useState("");
   const quickAmounts = [100, 500, 1000, 2000, 5000];
@@ -217,6 +219,20 @@ const AddMoneyModal = ({ visible, onClose, onSubmit, loading }) => {
             )}
           </TouchableOpacity>
 
+          {/* CCAvenue route — cards / net banking / wallets. Needs only an amount,
+              no UPI ID, so it is offered as a distinct secondary action rather
+              than being folded into the UPI submit above. */}
+          <TouchableOpacity
+            style={[styles.altPayBtn, !amount && styles.submitBtnDisabled]}
+            onPress={() => onCardPay?.(amount)}
+            disabled={!amount || loading}
+            accessibilityRole="button"
+            accessibilityLabel="Pay by card or net banking"
+          >
+            <CreditCard size={18} color={color.text} strokeWidth={1.75} />
+            <Text style={styles.altPayBtnText}>Card, Net Banking or Wallet</Text>
+          </TouchableOpacity>
+
           <View style={styles.secureNote}>
             <Lock size={12} color={color.textSecondary} strokeWidth={1.8} />
             <Text style={styles.secureNoteText}>Secured with 256-bit encryption</Text>
@@ -234,6 +250,9 @@ const Wallet = () => {
   const [activeFilter, setActiveFilter] = useState("all");
   const [walletBalance, setWalletBalance] = useState(null);
   const [hideBalance, setHideBalance] = useState(false);
+  // CCAvenue (card / net banking / wallet) top-up
+  const [ccavVisible, setCcavVisible] = useState(false);
+  const [ccavAmount, setCcavAmount] = useState("0");
   // Explicit pixel size for the banner art — images sized purely by absolute
   // insets don't render on this RN/New-Arch setup (every working image in the
   // app uses concrete width/height).
@@ -282,6 +301,17 @@ const Wallet = () => {
     } catch (e) {
       Alert.alert("Error", e.response?.data?.detail || "Something went wrong");
     }
+  };
+
+  const handleCardPay = (amount) => {
+    const value = parseFloat(amount);
+    if (!value || value < 1) {
+      Alert.alert("Enter an amount", "Please enter the amount you want to add.");
+      return;
+    }
+    setCcavAmount(String(value));
+    setShowAddModal(false);
+    setCcavVisible(true);
   };
 
   const balance = parseFloat(walletBalance?.available_balance || walletBalance?.balance || 0);
@@ -480,7 +510,21 @@ const Wallet = () => {
         visible={showAddModal}
         onClose={() => setShowAddModal(false)}
         onSubmit={handleAddMoney}
+        onCardPay={handleCardPay}
         loading={loading}
+      />
+
+      <CCAvenueCheckout
+        visible={ccavVisible}
+        amount={ccavAmount}
+        onClose={() => setCcavVisible(false)}
+        onResult={(res) => {
+          // Refresh from the server rather than trusting the screen's own state.
+          if (res?.credited) {
+            loadBalance();
+            loadHistory(1);
+          }
+        }}
       />
     </View>
   );
@@ -975,6 +1019,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: "#fff",
+  },
+  altPayBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: space.sm,
+    minHeight: 52,
+    borderRadius: radius.md,
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.borderStrong,
+    marginBottom: space.base,
+  },
+  altPayBtnText: {
+    ...type.button,
+    color: color.text,
   },
   secureNote: {
     flexDirection: "row",

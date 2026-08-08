@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { integrityHeaders } from '../utils/secureRequest';
 
 const BASE_URL = 'https://newapi.odhpay.com';
 
@@ -43,6 +44,8 @@ export const useAadharStore = create(
               'Content-Type': 'application/json',
               Authorization: `Bearer ${access_token}`,
               session_id: session_id || '',
+              // Guarded by require_fresh_integrity on the backend.
+              ...(await integrityHeaders()),
             },
           });
 
@@ -73,6 +76,8 @@ export const useAadharStore = create(
               'Content-Type': 'application/json',
               Authorization: `Bearer ${access_token}`,
               session_id: session_id || '',
+              // Guarded by require_fresh_integrity on the backend.
+              ...(await integrityHeaders()),
             },
           });
 
@@ -98,6 +103,8 @@ export const useAadharStore = create(
               'Content-Type': 'application/json',
               Authorization: `Bearer ${access_token}`,
               session_id: session_id || '',
+              // Guarded by require_fresh_integrity on the backend.
+              ...(await integrityHeaders()),
             },
           });
 
@@ -185,6 +192,8 @@ export const useAadharStore = create(
               'Content-Type': 'application/json',
               Authorization: `Bearer ${access_token}`,
               session_id: session_id || '',
+              // Guarded by require_fresh_integrity on the backend.
+              ...(await integrityHeaders()),
             },
           });
 

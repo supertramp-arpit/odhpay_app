@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { integrityHeaders } from '../utils/secureRequest';
 
 const BASE_URL = 'https://newapi.odhpay.com';
 
@@ -129,6 +130,20 @@ export const useWalletStore = create((set, get) => ({
     try {
       const access_token = await getToken();
 
+      // /wallet/topup is guarded by require_fresh_integrity. Callers historically
+      // omitted these params, which sent EMPTY header values — the backend treats
+      // those as missing and returns 422 once the per-request check is enforced.
+      // Fetch them here so every caller is covered.
+      let integrity = {};
+      if (integrityToken && integrityNonce) {
+        integrity = {
+          'x-integrity-token': integrityToken,
+          'x-integrity-nonce': integrityNonce,
+        };
+      } else {
+        integrity = await integrityHeaders();
+      }
+
       const response = await axios.post(
         `${BASE_URL}/api/v1/wallet/topup`,
         {
@@ -139,8 +154,7 @@ export const useWalletStore = create((set, get) => ({
           headers: {
             Authorization: `Bearer ${access_token}`,
             'Content-Type': 'application/json',
-            'x-integrity-token': integrityToken,
-            'x-integrity-nonce': integrityNonce,
+            ...integrity,
           },
         }
       );

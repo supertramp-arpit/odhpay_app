@@ -123,7 +123,7 @@ const WalletTransactionPin = () => {
   }, [focusPreviousInput]);
 
   // Call wallet pay API after PIN verification
-  const processWalletPayment = async (skipIntegrity = false) => {
+  const processWalletPayment = async () => {
     try {
       const access_token = await AsyncStorage.getItem('access_token');
       if (!access_token) {
@@ -134,30 +134,31 @@ const WalletTransactionPin = () => {
       // Get integrity token with error handling
       let token = "";
       let nonce = "";
-      
-      if (!skipIntegrity) {
+
+      {
         try {
           const integrityResult = await getIntegrityToken();
           token = integrityResult.token;
           nonce = integrityResult.nonce;
         } catch (integrityError) {
           console.error("Integrity Token Error:", integrityError);
-          
-          // Check if it's a network error - offer to proceed without integrity (DEV ONLY)
-          if (integrityError?.message?.includes("NETWORK_ERROR") || 
-              integrityError?.message?.includes("Network error") ||
-              integrityError?.message?.includes("-3")) {
+
+          // There is deliberately NO "proceed anyway" option here. This screen
+          // used to offer one on network errors, which shipped a user-tappable
+          // bypass of a payment security control in production builds. A failed
+          // integrity check must end the payment, not become a choice.
+          const isNetwork =
+            integrityError?.message?.includes("NETWORK_ERROR") ||
+            integrityError?.message?.includes("Network error") ||
+            integrityError?.message?.includes("-3");
+
+          if (isNetwork) {
             Alert.alert(
               "Network Error",
-              "Unable to verify device integrity. Please check your internet connection.",
+              "Unable to verify device security. Please check your internet connection and try again.",
               [
-                { text: "Retry", onPress: () => processWalletPayment(false) },
-                { 
-                  text: "Proceed Anyway (Dev)", 
-                  onPress: () => processWalletPayment(true),
-                  style: "destructive"
-                },
-                { text: "Cancel", style: "cancel" }
+                { text: "Retry", onPress: () => processWalletPayment() },
+                { text: "Cancel", style: "cancel" },
               ]
             );
           } else {
@@ -172,8 +173,6 @@ const WalletTransactionPin = () => {
           setLoading(false);
           return;
         }
-      } else {
-        console.warn("⚠️ Proceeding without integrity token (DEV MODE)");
       }
 
       const headers = {
