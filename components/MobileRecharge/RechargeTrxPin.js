@@ -9,7 +9,7 @@ import axios from "axios";
 import Theme from "../Theme";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { normalizeIndianMobile } from "../../utils/helper";
-import { integrityHeaders } from "../../utils/secureRequest";
+import CCAvenueCheckout from "../Wallet/CCAvenueCheckout";
 
 // Operator logos shipped locally — used for the header chip. Falls back to the
 // brand-coloured circle below if none matches.
@@ -46,6 +46,9 @@ const RechargeTrxPin = () => {
 
   const { user } = useRegisterStore();
   const [loading, setLoading] = useState(false);
+  // CCAvenue gateway checkout (recharges are no longer paid from the wallet)
+  const [ccavVisible, setCcavVisible] = useState(false);
+  const [ccavPayload, setCcavPayload] = useState(null);
   const [walletBalance, setWalletBalance] = useState(null);
 
   const { amount, mobile_number, recipient_name, circle, operator_code, circle_code } = route.params.payload || {};
@@ -131,72 +134,61 @@ const RechargeTrxPin = () => {
   }
 
 
-  const handlePaymentGateway = async () => {
-    // For now we pay every recharge from the wallet — the gateway flow is
-    // disabled until we re-enable Razorpay/SabPaisa for this surface. The
-    // backend's /wallet/pay-service endpoint debits the wallet AND triggers
-    // the BBPS recharge dispatch (via the new /recharge/initiate path) in
-    // one call, so we can navigate straight to the success screen on 200.
-    try {
-      setLoading(true);
-
-      const token = await AsyncStorage.getItem("access_token");
-      if (!token) {
-        Alert.alert("Error", "Authentication token not found");
-        setLoading(false);
-        return;
-      }
-
-      const headers = {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        // /wallet/pay-service is guarded by require_fresh_integrity — without
-        // these it returns 422 MISSING_INTEGRITY_HEADERS once the per-request
-        // check is enforced.
-        ...(await integrityHeaders()),
-      };
-
-      const payload = {
-        amount: parseFloat(amount),
-        service_type: "MobileRecharge",
-        purpose: "Payment",
-        recharge_data: {
-          mobile_number: normalizeIndianMobile(mobile_number),
-          operator_name: OperatorMap[recipient_name] || recipient_name,
-          operator_code: operator_code ? String(operator_code) : undefined,
-          circle: circle || undefined,
-          circle_code: circle_code || undefined,
-          recharge_type: "prepaid",
-        },
-      };
-
-      const { data } = await axios.post(
-        "https://newapi.odhpay.com/api/v1/wallet/pay-service",
-        payload,
-        { headers }
-      );
-
-      setLoading(false);
-
-      // Navigate immediately with `pending` so the user gets visual progress
-      // instead of staring at the same screen while we poll. The success
-      // screen owns its own websocket + poll loop and flips itself to
-      // success/failed when the backend signals terminal state.
-      const referenceId = data?.reference_id;
-      navigation.replace("RechargeSuccess", {
-        amount: parseFloat(amount),
+  // Recharges are paid through the CCAvenue gateway (card / UPI / net banking),
+  // NOT from the wallet. The wallet is now only a store of value funded by the
+  // ICICI top-up route. Opening the checkout creates the Service_Request and the
+  // gateway order; the backend dispatches the recharge once payment is confirmed.
+  const openGatewayCheckout = () => {
+    setLoading(false);
+    setCcavPayload({
+      service_type: "MobileRecharge",
+      purpose: "Payment",
+      recharge_data: {
         mobile_number: normalizeIndianMobile(mobile_number),
-        recipient_name: OperatorMap[recipient_name] || recipient_name,
-        RechargeStatus: "pending",
-        access_token: token,
-        responseData: {
-          bbps_reference_no: referenceId,
-          transaction_date: new Date().toISOString(),
-          message: data?.message || "Recharge initiated",
-          balance_after: data?.balance_after,
-        },
-      });
+        operator_name: OperatorMap[recipient_name] || recipient_name,
+        operator_code: operator_code ? String(operator_code) : undefined,
+        circle: circle || undefined,
+        circle_code: circle_code || undefined,
+        recharge_type: "prepaid",
+      },
+    });
+    setCcavVisible(true);
+  };
+
+  // Called once the gateway reports a terminal outcome (server-verified).
+  const onGatewayResult = async (res) => {
+    setCcavVisible(false);
+    if (res?.status !== "SUCCESS") {
+      // Payment did not go through — nothing was charged, stay put so the user
+      // can retry without rebuilding the recharge.
+      Alert.alert(
+        res?.status === "ABORTED" ? "Payment cancelled" : "Payment failed",
+        res?.failure_message || "You have not been charged. Please try again."
+      );
+      return;
+    }
+    const token = await AsyncStorage.getItem("access_token");
+    // Payment is confirmed; the recharge itself is dispatched server-side and
+    // reports separately, so hand over as `pending` and let the success screen's
+    // websocket/poll loop resolve it — same contract as before.
+    navigation.replace("RechargeSuccess", {
+      amount: parseFloat(amount),
+      mobile_number: normalizeIndianMobile(mobile_number),
+      recipient_name: OperatorMap[recipient_name] || recipient_name,
+      RechargeStatus: "pending",
+      access_token: token,
+      responseData: {
+        bbps_reference_no: res?.order_id,
+        transaction_date: new Date().toISOString(),
+        message: "Payment received, recharge in progress",
+      },
+    });
+  };
+
+  const handlePaymentGateway = async () => {
+    try {
+      openGatewayCheckout();
+      return;
     } catch (error) {
       console.error("Wallet pay error:", error?.response?.data || error?.message);
       setLoading(false);
@@ -222,7 +214,6 @@ const RechargeTrxPin = () => {
   }
 
   const finalAmount = commission?.total ? parseFloat(commission.total) : parseFloat(amount);
-  const lowBalance = walletBalance != null && walletBalance < finalAmount;
 
   return (
     <SafeAreaView style={styles.safe} edges={["bottom"]}>
@@ -313,28 +304,16 @@ const RechargeTrxPin = () => {
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
               style={styles.payMethodIcon}
             >
-              <Ionicons name="wallet" size={22} color="#FFF" />
+              <Ionicons name="card" size={22} color="#FFF" />
             </LinearGradient>
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.payMethodName}>ODH Wallet</Text>
-              <Text style={styles.payMethodSub}>
-                {walletBalance != null
-                  ? `Balance: ₹${walletBalance.toFixed(2)}`
-                  : "Fetching balance…"}
-              </Text>
+              <Text style={styles.payMethodName}>Card, UPI or Net Banking</Text>
+              <Text style={styles.payMethodSub}>Secure payment via CCAvenue</Text>
             </View>
             <View style={[styles.selectedDot, { backgroundColor: theme.accent }]}>
               <Ionicons name="checkmark" size={13} color="#FFF" />
             </View>
           </View>
-          {lowBalance && (
-            <View style={styles.warnRow}>
-              <Ionicons name="alert-circle" size={14} color="#B45309" />
-              <Text style={styles.warnText}>
-                Insufficient wallet balance for this recharge.
-              </Text>
-            </View>
-          )}
         </View>
 
         {/* Safety note */}
@@ -353,13 +332,13 @@ const RechargeTrxPin = () => {
           <Text style={styles.footerLeftAmount}>₹{finalAmount.toFixed(2)}</Text>
         </View>
         <TouchableOpacity
-          style={[styles.payBtnWrap, (loading || lowBalance) && styles.payBtnDisabled]}
+          style={[styles.payBtnWrap, loading && styles.payBtnDisabled]}
           onPress={handlePaymentGateway}
-          disabled={loading || lowBalance}
+          disabled={loading}
           activeOpacity={0.85}
         >
           <LinearGradient
-            colors={(loading || lowBalance) ? ["#C7CBD1", "#C7CBD1"] : theme.accentGradient}
+            colors={loading ? ["#C7CBD1", "#C7CBD1"] : theme.accentGradient}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
             style={styles.payBtn}
           >
@@ -374,6 +353,14 @@ const RechargeTrxPin = () => {
           </LinearGradient>
         </TouchableOpacity>
       </View>
+
+      <CCAvenueCheckout
+        visible={ccavVisible}
+        amount={finalAmount}
+        servicePayload={ccavPayload}
+        onClose={() => setCcavVisible(false)}
+        onResult={onGatewayResult}
+      />
     </SafeAreaView>
   );
 };

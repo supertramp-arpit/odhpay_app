@@ -19,6 +19,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRegisterStore } from "../../store";
 import { useWalletStore } from "../../store/useWalletStore";
 import Theme from "../Theme";
+import CCAvenueCheckout from "../Wallet/CCAvenueCheckout";
 
 
 const { width, height } = Dimensions.get("window");
@@ -104,6 +105,8 @@ function PayFromWallet() {
   const [hasSufficientBalance, setHasSufficientBalance] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState("info");
+  // Bills/services are charged to the CCAvenue gateway, not the wallet.
+  const [ccavVisible, setCcavVisible] = useState(false);
   const [modalTitle, setModalTitle] = useState("");
   const [modalMessage, setModalMessage] = useState("");
   const route = useRoute();
@@ -304,17 +307,30 @@ function PayFromWallet() {
     }
   }, [payload, amount]);
 
-  // Handle payment - navigate to PIN screen if sufficient balance
+  // Bills and services are paid through the CCAvenue gateway (card / UPI / net
+  // banking) — NOT from the wallet balance. The wallet is now only a store of
+  // value funded by the ICICI top-up route, so there is no balance check and no
+  // transaction PIN step here any more; the gateway performs its own auth.
   const handlePayment = useCallback(() => {
-    if (hasSufficientBalance) {
-      // Navigate to Transaction PIN screen for wallet payment
-      navigation.navigate("WalletTransactionPin", {
-        amount: amount,
-        payload: payload,
-        walletBalance: walletBalance,
-      });
+    setCcavVisible(true);
+  }, []);
+
+  // Server-verified outcome from the gateway.
+  const onGatewayResult = useCallback((res) => {
+    setCcavVisible(false);
+    if (res?.status === "SUCCESS") {
+      // Payment captured. The bill/recharge itself is dispatched server-side and
+      // confirms separately, so don't claim delivery here.
+      setModalType("success");
+      setModalVisible(true);
+    } else if (res?.status === "ABORTED") {
+      setModalType("info");
+      setModalVisible(true);
+    } else {
+      setModalType("error");
+      setModalVisible(true);
     }
-  }, [hasSufficientBalance, amount, payload, walletBalance, navigation]);
+  }, []);
 
 
 
@@ -464,6 +480,20 @@ function PayFromWallet() {
         onPrimary={onPrimary}
         onSecondary={closeModal}
         onRequestClose={closeModal}
+      />
+
+      <CCAvenueCheckout
+        visible={ccavVisible}
+        amount={Number(payload?.amount || amount || 0)}
+        servicePayload={{
+          service_type: String(payload?.service_type || "BBPS"),
+          purpose: payload?.purpose || "Bill Payment",
+          bbps_data: payload?.bbps_data,
+          recharge_data: payload?.recharge_data,
+          service_metadata: payload?.service_metadata || {},
+        }}
+        onClose={() => setCcavVisible(false)}
+        onResult={onGatewayResult}
       />
     </View>
   );

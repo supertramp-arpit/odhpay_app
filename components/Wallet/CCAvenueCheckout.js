@@ -71,7 +71,17 @@ const buildFormHTML = (transactionUrl, accessCode, encRequest) => `<!doctype htm
   <script>document.getElementById('ccav').submit();</script>
 </body></html>`;
 
-export default function CCAvenueCheckout({ visible, amount, onClose, onResult }) {
+/**
+ * @param {object}  props
+ * @param {boolean} props.visible
+ * @param {string|number} props.amount
+ * @param {object}  [props.servicePayload]  When present this is a SERVICE payment
+ *   (recharge / bill) charged straight to card / UPI / net banking — no wallet
+ *   balance involved. Shape mirrors the backend's CreateServiceOrderRequest:
+ *   { service_type, purpose?, recharge_data?, bbps_data?, service_metadata? }.
+ *   When absent it is a wallet top-up.
+ */
+export default function CCAvenueCheckout({ visible, amount, servicePayload, onClose, onResult }) {
   const [phase, setPhase] = useState(PHASE.CREATING);
   const [order, setOrder] = useState(null);
   const [result, setResult] = useState(null);
@@ -105,10 +115,17 @@ export default function CCAvenueCheckout({ visible, amount, onClose, onResult })
       }
 
       // Gate 2: signed request (timestamp + single-use nonce + body HMAC).
-      const { data } = await signedPost("/api/v1/payments/ccavenue/order", {
-        amount: String(amount),
-        purpose: "wallet_topup",
-      });
+      // Services go to /service-order (creates a Service_Request and dispatches
+      // the recharge/bill after payment); top-ups go to /order (credits wallet).
+      const { data } = servicePayload
+        ? await signedPost("/api/v1/payments/ccavenue/service-order", {
+            ...servicePayload,
+            amount: String(amount),
+          })
+        : await signedPost("/api/v1/payments/ccavenue/order", {
+            amount: String(amount),
+            purpose: "wallet_topup",
+          });
       if (!mountedRef.current) return;
       setOrder(data);
       setPhase(PHASE.PAYING);
@@ -250,10 +267,17 @@ export default function CCAvenueCheckout({ visible, amount, onClose, onResult })
       Icon = CheckCircle2;
       iconColor = color.successFg;
       iconBg = color.successBg;
-      title = "Money added";
-      body = result?.wallet_balance
-        ? `Your wallet balance is now ${formatINR(result.wallet_balance)}.`
-        : "Your wallet has been updated.";
+      if (servicePayload) {
+        title = "Payment successful";
+        // The payment is confirmed; the recharge/bill is dispatched right after
+        // and reports separately. Don't claim it's already delivered.
+        body = "We're completing your order now. You'll get a confirmation shortly.";
+      } else {
+        title = "Money added";
+        body = result?.wallet_balance
+          ? `Your wallet balance is now ${formatINR(result.wallet_balance)}.`
+          : "Your wallet has been updated.";
+      }
     } else if (failed) {
       Icon = XCircle;
       iconColor = color.errorFg;
