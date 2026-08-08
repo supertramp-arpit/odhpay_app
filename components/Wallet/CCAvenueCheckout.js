@@ -102,17 +102,18 @@ export default function CCAvenueCheckout({ visible, amount, servicePayload, onCl
     setError(null);
     setResult(null);
     handledRef.current = false;
+    // Declared outside the try so the catch block can read it — a `const` inside
+    // the try is not in scope there.
+    let integrityMessage = null;
     try {
-      // Gate 1: attest the app + device before we mint a payment session.
-      // /order requires authenticate_verified_device and returns 403
-      // DEVICE_NOT_VERIFIED until this succeeds.
+      // Gate 1: attest the app + device. This is an OPTIMISATION, not the
+      // decision — the server is the authority. A failure here is remembered but
+      // does NOT abort, because the backend may still authorise the caller (e.g.
+      // an allowlisted QA account on a non-Play build). Aborting client-side
+      // would override a decision that isn't ours to make.
       const verified = await ensureDeviceVerified();
       if (!mountedRef.current) return;
-      if (!verified.ok) {
-        setError(verified.message || "We couldn't verify this device.");
-        setPhase(PHASE.RESULT);
-        return;
-      }
+      integrityMessage = verified.ok ? null : verified.message;
 
       // Gate 2: signed request (timestamp + single-use nonce + body HMAC).
       // Services go to /service-order (creates a Service_Request and dispatches
@@ -132,15 +133,19 @@ export default function CCAvenueCheckout({ visible, amount, servicePayload, onCl
     } catch (e) {
       if (!mountedRef.current) return;
       const detail = e?.response?.data?.detail;
-      const message =
-        typeof detail === "string"
+      // If the server rejected on device verification, the integrity reason we
+      // captured above is the useful explanation — the generic 403 text is not.
+      const isDeviceRejection = detail?.error === "DEVICE_NOT_VERIFIED";
+      const message = isDeviceRejection
+        ? integrityMessage ||
+          "This device couldn't be verified for payments. Please install ODH Pay from the Play Store."
+        : typeof detail === "string"
           ? detail
-          : detail?.message ||
-            "We couldn't start this payment. Please try again.";
+          : detail?.message || "We couldn't start this payment. Please try again.";
       setError(message);
       setPhase(PHASE.RESULT);
     }
-  }, [amount]);
+  }, [amount, servicePayload]);
 
   useEffect(() => {
     mountedRef.current = true;
