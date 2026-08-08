@@ -294,8 +294,12 @@ Date: ${moment(responseData.transaction_date).format("DD MMM YYYY hh:mm a")}`,
           <View style={styles.kvRow}>
             <Text style={styles.kvLabel}>Paid via</Text>
             <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Ionicons name="wallet" size={14} color={Theme.colors.text} style={{ marginRight: 6 }} />
-              <Text style={styles.kvValue}>ODH Wallet</Text>
+              <Ionicons name="card" size={14} color={Theme.colors.text} style={{ marginRight: 6 }} />
+              {/* Recharges are charged to the payment gateway, not the wallet.
+                  Show the real instrument when the backend reports one. */}
+              <Text style={styles.kvValue}>
+                {transactionDetails?.paymentMode || "Card / UPI / Net Banking"}
+              </Text>
             </View>
           </View>
           <View style={styles.kvRow}>

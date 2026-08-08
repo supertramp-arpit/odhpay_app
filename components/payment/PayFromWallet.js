@@ -100,9 +100,6 @@ const NoticeModal = ({
 function PayFromWallet() {
   const navigation = useNavigation();
   const [loading, setLoading] = useState(false);
-  const [checkingBalance, setCheckingBalance] = useState(true);
-  const [walletBalance, setWalletBalance] = useState(0);
-  const [hasSufficientBalance, setHasSufficientBalance] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState("info");
   // Bills/services are charged to the CCAvenue gateway, not the wallet.
@@ -118,12 +115,13 @@ function PayFromWallet() {
   const amount = route.params?.amount;
 
   const user = useRegisterStore((state) => state.user);
+  // No wallet balance is read here any more — this screen charges the CCAvenue
+  // gateway, so `fetchBalance` was pulled out along with the balance check.
   const {
     transactionHistory,
     fetchWalletHistory,
     initiateTopup,
     checkTopupStatus,
-    fetchBalance,
     loading: walletLoading,
   } = useWalletStore();
   // console.log(user.user.MobileNumber)
@@ -146,29 +144,10 @@ function PayFromWallet() {
     ]).start();
   }, []);
 
-  // Check wallet balance on screen load
-  useEffect(() => {
-    const checkWalletBalance = async () => {
-      try {
-        setCheckingBalance(true);
-        const balanceData = await fetchBalance();
-        const balance = parseFloat(balanceData?.balance || balanceData?.available_balance || 0);
-        setWalletBalance(balance);
-        setHasSufficientBalance(balance >= Number(amount));
-        console.log("Wallet Balance:", balance, "Required Amount:", amount, "Sufficient:", balance >= Number(amount));
-      } catch (error) {
-        console.error("Error fetching wallet balance:", error);
-        setWalletBalance(0);
-        setHasSufficientBalance(false);
-      } finally {
-        setCheckingBalance(false);
-      }
-    };
-
-    if (amount) {
-      checkWalletBalance();
-    }
-  }, [amount, fetchBalance]);
+  // Wallet balance is irrelevant here: bills and services are charged to the
+  // CCAvenue gateway (card / UPI / net banking), never to the wallet. The old
+  // balance lookup also kept the Pay button disabled until it resolved, so a slow
+  // or failing balance call blocked payment entirely.
 
   const openModal = (type, title, message) => {
     setModalType(type);
@@ -354,17 +333,13 @@ function PayFromWallet() {
 
         <View style={styles.logoContainer}>
           <View style={styles.logoCircle}>
-            <MaterialCommunityIcons name="wallet" size={isSmallDevice ? 28 : 32} color="#fff" />
+            <MaterialCommunityIcons name="credit-card-outline" size={isSmallDevice ? 28 : 32} color="#fff" />
           </View>
         </View>
 
         <View style={styles.titleSection}>
-          <Text style={styles.title}>Wallet Payment</Text>
-          <Text style={styles.subtitle}>
-            {hasSufficientBalance 
-              ? "Pay securely from your wallet balance" 
-              : "Insufficient wallet balance"}
-          </Text>
+          <Text style={styles.title}>Secure Payment</Text>
+          <Text style={styles.subtitle}>Card, UPI or Net Banking</Text>
         </View>
       </Animated.View>
 
@@ -389,28 +364,15 @@ function PayFromWallet() {
         <View style={styles.divider} />
 
         <View style={styles.detailsSection}>
-          {/* Wallet Balance Info */}
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Wallet Balance</Text>
-            {checkingBalance ? (
-              <ActivityIndicator size="small" color={Theme.colors.primary} />
-            ) : (
-              <Text style={[styles.detailValue, { color: hasSufficientBalance ? '#10b981' : '#ef4444' }]}>
-                ₹{walletBalance.toFixed(2)}
-              </Text>
-            )}
-          </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Payment Method</Text>
             <View style={styles.methodBadge}>
-              <MaterialCommunityIcons 
-                name={hasSufficientBalance ? "wallet" : "credit-card-outline"} 
-                size={13} 
-                color={Theme.colors.primary} 
+              <MaterialCommunityIcons
+                name="credit-card-outline"
+                size={13}
+                color={Theme.colors.primary}
               />
-              <Text style={styles.methodText}>
-                {checkingBalance ? 'Checking...' : hasSufficientBalance ? 'Wallet' : 'Cards, UPI'}
-              </Text>
+              <Text style={styles.methodText}>Card, UPI, Net Banking</Text>
             </View>
           </View>
           <View style={styles.detailRow}>
@@ -437,33 +399,20 @@ function PayFromWallet() {
         </View>
 
         <TouchableOpacity
-          style={[styles.payButton, (loading || checkingBalance) && styles.payButtonDisabled]}
+          style={[styles.payButton, loading && styles.payButtonDisabled]}
           onPress={handlePayment}
-          disabled={loading || checkingBalance}
+          disabled={loading}
           activeOpacity={0.8}
         >
-          {loading || checkingBalance ? (
+          {loading ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <>
-              <MaterialCommunityIcons 
-                name={hasSufficientBalance ? "wallet" : "credit-card-outline"} 
-                size={18} 
-                color="#fff" 
-              />
-              <Text style={styles.payButtonText}>
-                {hasSufficientBalance ? `Pay from Wallet ₹${amount.toFixed(2)}` : `Pay ₹${amount.toFixed(2)}`}
-              </Text>
+              <MaterialCommunityIcons name="credit-card-outline" size={18} color="#fff" />
+              <Text style={styles.payButtonText}>{`Pay ₹${amount.toFixed(2)}`}</Text>
             </>
           )}
         </TouchableOpacity>
-
-        {/* Show insufficient balance message */}
-        {!checkingBalance && !hasSufficientBalance && (
-          <Text style={styles.insufficientBalanceText}>
-            Insufficient wallet balance. You'll be redirected to payment gateway.
-          </Text>
-        )}
 
         <Text style={styles.agreementText}>
           Your payment is encrypted and secure

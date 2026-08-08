@@ -24,7 +24,7 @@ import {
   Share2,
   Copy,
   Calendar,
-  Wallet,
+  CreditCard,
   Receipt,
   Check,
   X,
@@ -497,7 +497,7 @@ const BbpsTransactionSuccess = () => {
           <View style={styles.section}>
             <View style={styles.paymentHeader}>
               <View style={styles.paymentHeaderLeft}>
-                <Wallet size={22} color="#000" />
+                <Receipt size={22} color="#000" />
                 <Text style={styles.paymentHeaderText}>Payment details</Text>
               </View>
               <ChevronDown size={20} color="#666" />
@@ -522,8 +522,10 @@ const BbpsTransactionSuccess = () => {
             <View style={styles.idSection}>
               <Text style={styles.idLabel}>Payment Method</Text>
               <View style={styles.walletBadge}>
-                <Wallet size={14} color="#000000" />
-                <Text style={styles.walletBadgeText}>ODH Wallet</Text>
+                <CreditCard size={14} color="#000000" />
+                <Text style={styles.walletBadgeText}>
+                  {transactionDetails?.paymentMode || "Card / UPI / Net Banking"}
+                </Text>
               </View>
             </View>
 
@@ -534,14 +536,16 @@ const BbpsTransactionSuccess = () => {
 
             <View style={styles.debitedSection}>
               <Text style={styles.debitedLabel}>
-                {isFailed ? "Amount will be refunded in case of debit" : "Debited from Wallet"}
+                {isFailed ? "Amount will be refunded in case of debit" : "Paid via payment gateway"}
               </Text>
               <View style={styles.debitedInfo}>
                 <View style={styles.walletIconCircle}>
-                  <Wallet size={20} color="#FFFFFF" />
+                  <CreditCard size={20} color="#FFFFFF" />
                 </View>
                 <View style={styles.debitedDetails}>
-                  <Text style={styles.accountNumber}>ODH Wallet</Text>
+                  <Text style={styles.accountNumber}>
+                    {transactionDetails?.paymentMode || "Card / UPI / Net Banking"}
+                  </Text>
                   <Text style={styles.utrNumber}>Ref: {transactionDetails.referenceId}</Text>
                 </View>
                 <Text style={styles.debitedAmount}>₹{transactionDetails.amount}</Text>
