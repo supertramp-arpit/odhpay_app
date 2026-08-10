@@ -17,6 +17,7 @@ import SweetAlert from "../miscellaneous/SweetAlert";
 import { useRegisterStore } from "../../store/useRegisterStore";
 import { logBBPSFlow } from "../../utils/apiLogger";
 import { normalizeIndianMobile } from "../../utils/helper";
+import { getLoginMobile } from "../../utils/secureRequest";
 
 // Operators database
 const ALL_OPERATORS = [
@@ -122,9 +123,24 @@ const ProceedToPayment = () => {
     return n === "registeredcontactnumber" || n === "registeredmobilenumber";
   };
 
+  // Authoritative login mobile for the locked field. The store may not be
+  // hydrated on this screen (it renders empty when it isn't), so fall back to the
+  // authenticated session — this value is compliance-relevant and must be right.
+  const [loginMobile, setLoginMobile] = useState("");
   useEffect(() => {
-    if (!mobile) return;
-    const locked = normalizeIndianMobile(String(mobile));
+    let cancelled = false;
+    (async () => {
+      const num = await getLoginMobile(mobile);
+      if (!cancelled) setLoginMobile(num);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mobile]);
+
+  useEffect(() => {
+    if (!loginMobile) return;
+    const locked = normalizeIndianMobile(String(loginMobile));
     const lockedFields = registrationFields.filter((f) =>
       isRegisteredContactParam(f?.paramName)
     );
@@ -140,7 +156,7 @@ const ProceedToPayment = () => {
       });
       return changed ? next : prev;
     });
-  }, [mobile, registrationFields]);
+  }, [loginMobile, registrationFields]);
   const [errors, setErrors] = useState({});
   const [minAmount, setMinAmount] = useState(1);
   const [maxAmount, setMaxAmount] = useState(Infinity);

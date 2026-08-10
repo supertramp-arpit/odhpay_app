@@ -19,6 +19,7 @@ import axios from "axios";
 import SweetAlert from "../miscellaneous/SweetAlert";
 import { logBBPSFlow } from "../../utils/apiLogger";
 import { normalizeIndianMobile } from "../../utils/helper";
+import { getLoginMobile } from "../../utils/secureRequest";
 
 
 
@@ -100,9 +101,24 @@ const VehicleRegistration = () => {
 
   // Force the login mobile into the form state so it is what actually gets
   // submitted — not merely what is displayed.
+  // Authoritative login mobile for the locked field. The store may not be
+  // hydrated on this screen (it renders empty when it isn't), so fall back to the
+  // authenticated session — this value is compliance-relevant and must be right.
+  const [loginMobile, setLoginMobile] = useState("");
   useEffect(() => {
-    if (!mobile) return;
-    const locked = normalizeIndianMobile(String(mobile));
+    let cancelled = false;
+    (async () => {
+      const num = await getLoginMobile(mobile);
+      if (!cancelled) setLoginMobile(num);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mobile]);
+
+  useEffect(() => {
+    if (!loginMobile) return;
+    const locked = normalizeIndianMobile(String(loginMobile));
     const lockedFields = registrationFields.filter((f) =>
       isRegisteredContactParam(f?.paramName)
     );
@@ -119,7 +135,7 @@ const VehicleRegistration = () => {
       });
       return changed ? next : prev;
     });
-  }, [mobile, registrationFields]);
+  }, [loginMobile, registrationFields]);
 
   useEffect(() => {
     console.log("=== VehicleRegistration Params ===");
@@ -275,7 +291,7 @@ const VehicleRegistration = () => {
       const TransactionData = {
         biller_id: biller_id,
         input_params: urlData,
-        fetched_by_user: mobile ? String(mobile) : "",
+        fetched_by_user: loginMobile || (mobile ? String(mobile) : ""),
         amount: "",
       };
 

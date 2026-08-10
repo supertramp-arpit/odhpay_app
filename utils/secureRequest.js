@@ -173,3 +173,59 @@ export async function signedPost(path, body, { timeout = 20000 } = {}) {
     transformRequest: [(d) => d], // already a string; must not be re-serialised
   });
 }
+
+/**
+ * The mobile number the customer is LOGGED IN with.
+ *
+ * Required by the BPCL LPG circular: the "Registered Contact Number" customer
+ * parameter must come from the app login mobile, not from anything the user can
+ * type. Because that value is compliance-relevant, it is resolved from the
+ * authenticated session rather than from whichever store happens to be hydrated
+ * on the current screen:
+ *
+ *   1. cached value from a previous resolve (fast path)
+ *   2. GET /register/check_user with the stored access token  (authoritative)
+ *
+ * Callers may pass a store-derived value as `hint`; it is used only if it is a
+ * valid 10-digit number, and the authoritative lookup still runs when it is not.
+ * Returns "" when it cannot be established — callers must treat that as
+ * "cannot proceed", never as "any number will do".
+ */
+const LOGIN_MOBILE_KEY = "login_mobile_number";
+
+export async function getLoginMobile(hint) {
+  const ten = (v) => {
+    const d = String(v ?? "").replace(/\D/g, "");
+    return d.length >= 10 ? d.slice(-10) : "";
+  };
+
+  const fromHint = ten(hint);
+  if (fromHint) return fromHint;
+
+  try {
+    const cached = ten(await AsyncStorage.getItem(LOGIN_MOBILE_KEY));
+    if (cached) return cached;
+  } catch {
+    // ignore — fall through to the network lookup
+  }
+
+  try {
+    const token = await AsyncStorage.getItem("access_token");
+    if (!token) return "";
+    const { data } = await axios.get(`${BASE_URL}/register/check_user`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      timeout: 15000,
+    });
+    const num = ten(data?.user?.MobileNumber ?? data?.MobileNumber);
+    if (num) {
+      try {
+        await AsyncStorage.setItem(LOGIN_MOBILE_KEY, num);
+      } catch {
+        // caching is best-effort
+      }
+    }
+    return num;
+  } catch {
+    return "";
+  }
+}
