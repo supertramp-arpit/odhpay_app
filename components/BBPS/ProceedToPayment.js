@@ -16,8 +16,6 @@ import axios from "axios";
 import SweetAlert from "../miscellaneous/SweetAlert";
 import { useRegisterStore } from "../../store/useRegisterStore";
 import { logBBPSFlow } from "../../utils/apiLogger";
-import { normalizeIndianMobile } from "../../utils/helper";
-import { getLoginMobile } from "../../utils/secureRequest";
 
 // Operators database
 const ALL_OPERATORS = [
@@ -111,52 +109,7 @@ const ProceedToPayment = () => {
 
   const [inputs, setInputs] = useState({});
 
-  // ---------------------------------------------------------------------------
-  // BBPS / BPCL compliance: "Registered Contact Number" (see BillerInputForm.js)
-  //
-  // This screen is a SECOND place biller parameters can be entered, so the same
-  // lock must apply here — otherwise a customer could simply edit the number on
-  // this screen and defeat the control.
-  // ---------------------------------------------------------------------------
-  const isRegisteredContactParam = (paramName) => {
-    const n = (paramName || "").trim().toLowerCase().replace(/[^a-z]/g, "");
-    return n === "registeredcontactnumber" || n === "registeredmobilenumber";
-  };
 
-  // Authoritative login mobile for the locked field. The store may not be
-  // hydrated on this screen (it renders empty when it isn't), so fall back to the
-  // authenticated session — this value is compliance-relevant and must be right.
-  const [loginMobile, setLoginMobile] = useState("");
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const num = await getLoginMobile(mobile);
-      if (!cancelled) setLoginMobile(num);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [mobile]);
-
-  useEffect(() => {
-    if (!loginMobile) return;
-    const locked = normalizeIndianMobile(String(loginMobile));
-    const lockedFields = registrationFields.filter((f) =>
-      isRegisteredContactParam(f?.paramName)
-    );
-    if (lockedFields.length === 0) return;
-    setInputs((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      lockedFields.forEach((f) => {
-        if (next[f.paramName] !== locked) {
-          next[f.paramName] = locked;
-          changed = true;
-        }
-      });
-      return changed ? next : prev;
-    });
-  }, [loginMobile, registrationFields]);
   const [errors, setErrors] = useState({});
   const [minAmount, setMinAmount] = useState(1);
   const [maxAmount, setMaxAmount] = useState(Infinity);
@@ -625,22 +578,6 @@ const ProceedToPayment = () => {
                 value={fieldValue}
                 autoCapitalize="none"
               />
-            ) : isRegisteredContactParam(field?.paramName) ? (
-              /* Locked to the app login mobile — BPCL LPG circular. */
-              <View>
-                <TextInput
-                  style={[styles.input, styles.inputLocked]}
-                  value={fieldValue}
-                  editable={false}
-                  selectTextOnFocus={false}
-                  keyboardType="numeric"
-                  accessibilityLabel={`Registered contact number ${fieldValue}, not editable`}
-                />
-                <Text style={styles.lockedHint}>
-                  Your registered mobile number is used automatically and cannot be
-                  changed.
-                </Text>
-              </View>
             ) : (
               <TextInput
                 style={[
@@ -742,18 +679,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 14,
-    marginBottom: 8,
-  },
-  inputLocked: {
-    backgroundColor: "#F4F5F7",
-    color: "#6B7280",
-    borderColor: "#E4E7EC",
-    marginBottom: 4,
-  },
-  lockedHint: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: "#6B7280",
     marginBottom: 8,
   },
   errorBorder: {

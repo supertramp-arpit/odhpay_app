@@ -18,8 +18,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import SweetAlert from "../miscellaneous/SweetAlert";
 import { logBBPSFlow } from "../../utils/apiLogger";
-import { normalizeIndianMobile } from "../../utils/helper";
-import { getLoginMobile } from "../../utils/secureRequest";
 
 
 
@@ -49,22 +47,6 @@ const VehicleRegistration = () => {
     }
   }, [user]);
 
-  // ---------------------------------------------------------------------------
-  // BBPS / BPCL compliance: "Registered Contact Number"
-  //
-  // Per the BPCL LPG circular issued via BBPS, for these billers the registered
-  // contact number must be taken from the customer's APP LOGIN mobile number and
-  // must NOT be editable — booking is permitted only when the number is
-  // registered against the LPG ID. Letting the customer type an arbitrary number
-  // here would breach that.
-  //
-  // Matched on the MDM parameter NAME rather than a hard-coded biller list, so
-  // any biller BillAvenue publishes with this parameter is covered automatically.
-  // ---------------------------------------------------------------------------
-  const isRegisteredContactParam = (paramName) => {
-    const n = (paramName || "").trim().toLowerCase().replace(/[^a-z]/g, "");
-    return n === "registeredcontactnumber" || n === "registeredmobilenumber";
-  };
 
 
   // =====================================================
@@ -98,44 +80,6 @@ const VehicleRegistration = () => {
 
   const [inputs, setInputs] = useState({});
   const [errors, setErrors] = useState({});
-
-  // Force the login mobile into the form state so it is what actually gets
-  // submitted — not merely what is displayed.
-  // Authoritative login mobile for the locked field. The store may not be
-  // hydrated on this screen (it renders empty when it isn't), so fall back to the
-  // authenticated session — this value is compliance-relevant and must be right.
-  const [loginMobile, setLoginMobile] = useState("");
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const num = await getLoginMobile(mobile);
-      if (!cancelled) setLoginMobile(num);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [mobile]);
-
-  useEffect(() => {
-    if (!loginMobile) return;
-    const locked = normalizeIndianMobile(String(loginMobile));
-    const lockedFields = registrationFields.filter((f) =>
-      isRegisteredContactParam(f?.paramName)
-    );
-    if (lockedFields.length === 0) return;
-
-    setInputs((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      lockedFields.forEach((f) => {
-        if (next[f.paramName] !== locked) {
-          next[f.paramName] = locked;
-          changed = true;
-        }
-      });
-      return changed ? next : prev;
-    });
-  }, [loginMobile, registrationFields]);
 
   useEffect(() => {
     console.log("=== VehicleRegistration Params ===");
@@ -291,7 +235,7 @@ const VehicleRegistration = () => {
       const TransactionData = {
         biller_id: biller_id,
         input_params: urlData,
-        fetched_by_user: loginMobile || (mobile ? String(mobile) : ""),
+        fetched_by_user: mobile ? String(mobile) : "",
         amount: "",
       };
 
@@ -550,25 +494,6 @@ const VehicleRegistration = () => {
                   ))}
                 </Picker>
               </View>
-            ) : isRegisteredContactParam(fieldName) ? (
-              /* Locked to the app login mobile — see the BPCL circular note above.
-                 editable={false} plus no onChangeText: the value cannot be altered
-                 from the UI by any means. */
-              <View>
-                <TextInput
-                  style={[styles.input, styles.inputLocked]}
-                  value={inputs[field.paramName] || ""}
-                  editable={false}
-                  selectTextOnFocus={false}
-                  keyboardType="numeric"
-                  accessibilityLabel={`Registered contact number ${inputs[field.paramName] || ""}, not editable`}
-                />
-                <Text style={styles.lockedHint}>
-                  Your registered mobile number is used automatically and cannot be
-                  changed. Booking is allowed only for the number registered with
-                  this LPG ID.
-                </Text>
-              </View>
             ) : (
               <TextInput
                 style={[
@@ -671,21 +596,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     fontSize: 14,
-    marginBottom: 8,
-  },
-  // Read-only "Registered Contact Number" — visually distinct so it is obvious
-  // to the customer (and to a reviewer) that the value is fixed, not just
-  // coincidentally pre-typed.
-  inputLocked: {
-    backgroundColor: "#F4F5F7",
-    color: "#6B7280",
-    borderColor: "#E4E7EC",
-    marginBottom: 4,
-  },
-  lockedHint: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: "#6B7280",
     marginBottom: 8,
   },
   pickerContainer: {

@@ -18,7 +18,6 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
-import { sha256 } from "js-sha256";
 import axios from "axios";
 
 import { getIntegrityToken } from "./integrity";
@@ -150,6 +149,24 @@ export async function signedPost(path, body, { timeout = 20000 } = {}) {
   const payload = JSON.stringify(body ?? {});
 
   if (HMAC_SECRET) {
+    // Loaded lazily on purpose. This module is pulled in by the Zustand stores,
+    // which are in the app's boot path — a top-level import of an optional crypto
+    // package meant a missing/instalment-pending dependency took down unrelated
+    // screens (including login) at bundle time. Signing is only needed here, and
+    // only when a secret is configured.
+    let sha256;
+    try {
+      // eslint-disable-next-line global-require
+      ({ sha256 } = require("js-sha256"));
+    } catch {
+      console.warn("[secureRequest] js-sha256 unavailable — sending request unsigned");
+      return axios.post(`${BASE_URL}${path}`, payload, {
+        headers,
+        timeout,
+        transformRequest: [(d) => d],
+      });
+    }
+
     const timestamp = String(Math.floor(Date.now() / 1000));
     const nonceBytes = await Crypto.getRandomBytesAsync(16);
     const nonce = toHex(nonceBytes); // 32 chars — backend requires >= 16
