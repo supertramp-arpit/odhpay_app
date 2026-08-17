@@ -79,160 +79,60 @@ const CCAV_RESTYLE_JS = `
 
     var st = document.createElement('style');
     st.id = 'odhpay-skin';
+
+    /* ================= ODH Pay dark skin — COLOUR ONLY =================
+       Scope is deliberately narrow after repeated breakage. This sets colours
+       and nothing else. It does NOT set:
+         padding / margin / width / height / display / float
+         text-transform / font-size / background-image / background-position
+       Every one of those, applied blind to a grid whose runtime CSS we cannot
+       see, broke the layout: bank logos crushed to squares, the consent note
+       shouting in caps, the pay button deformed, labels clipped.
+       Colour is safe because it cannot reflow anything.
+
+       If a richer look is wanted, do it in CCAvenue M.A.R.S -> Payment Page
+       customisation. That is applied server-side by the gateway, survives
+       their updates, and cannot break the payment.
+       =================================================================== */
     st.innerHTML = [
-      /* ============ ODH Pay dark skin for CCAvenue checkout ============
-         HARD RULES (learned the hard way):
-         1. NEVER set 'display' on their elements. Each payment row holds TWO
-            spans (active + inactive) and their own CSS hides one; forcing
-            display duplicates every row.
-         2. '.primary-button-bg' is NOT only buttons — the countdown bar and the
-            bank shortcuts use it too. Style real buttons by tag/id instead.
-         3. '.ACTI' / '.NBBL-N' are <option> elements in the bank <select>,
-            not list rows.
-         CSS only; no DOM reads/writes beyond this <style> node.          ==== */
+      ':root{color-scheme:dark;}',
 
-      ':root{color-scheme:dark;',
-      '--bg:#0A0A0B;--surf:#141518;--surf2:#1B1D21;--line:#26282D;',
-      '--txt:#FFFFFF;--muted:#9AA1AD;--faint:#6B7280;}',
+      'html,body{background:#0A0A0B!important;color:#FFFFFF!important;}',
 
-      'html,body{background:var(--bg)!important;color:var(--txt)!important;',
-      'font-family:-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif!important;',
-      'font-size:15px!important;line-height:1.5!important;-webkit-font-smoothing:antialiased;}',
-      '*{box-shadow:none!important;text-shadow:none!important;}',
+      /* containers inherit the dark ground */
+      'div,section,table,td,th,tr,form,ul,li,p,label,fieldset,span{',
+      'background-color:transparent!important;}',
+      '.content-bg,.innerpanel-bg,.billingPage{background-color:#141518!important;}',
+      '.border{border-color:#26282D!important;}',
+      '.divider{border-color:#26282D!important;}',
 
-      'div,section,table,td,th,tr,form,ul,li,p,label,fieldset{',
-      'background-color:transparent!important;border-color:var(--line)!important;}',
-      '.content-bg,.innerpanel-bg,.billingPage{background-color:var(--surf)!important;}',
-      '.content-text,.innerpanel-text,.formText{color:var(--muted)!important;}',
-      '.highlight,.highlight-text,.orderTotal{color:var(--txt)!important;}',
-      '.border{border:1px solid var(--line)!important;}',
-      '.divider{border-color:var(--line)!important;opacity:.5;}',
-      '.radius4,.radius6{border-radius:16px!important;}',
-
-      /* merchant banner — our own header already carries the context */
-      '#logo,.header-bg.banner{display:none!important;}',
-
-      /* ---- countdown pill (must beat .primary-button-bg, hence the id) ---- */
-      'div.transaction-time{background:var(--surf2)!important;color:var(--muted)!important;',
-      'border:1px solid var(--line)!important;border-radius:999px!important;',
-      'font-size:12px!important;font-weight:400!important;padding:7px 15px!important;',
-      'margin:16px auto 6px!important;width:-webkit-fit-content!important;width:fit-content!important;}',
-      'div.transaction-time strong,#whenCountdown{color:var(--txt)!important;',
-      'font-weight:600!important;font-variant-numeric:tabular-nums;}',
-
-      /* ---- order id + language ---- */
-      '#orderinfo{background:transparent!important;border:0!important;padding:4px 18px 12px!important;}',
-      '#mobileno{color:var(--faint)!important;font-size:11px!important;letter-spacing:.4px;',
-      'font-variant-numeric:tabular-nums;}',
-
-      /* ---- totals ---- */
-      '#ordertotal,#orderAmt,#grandtotal,#amount{background:var(--surf)!important;}',
-      '#grandtotal{border-top:1px solid var(--line)!important;margin-top:10px!important;padding-top:14px!important;}',
-      '#grandtotal .innerpanel-text{color:var(--txt)!important;font-weight:600!important;}',
-      '#finalTotal{color:var(--txt)!important;font-size:21px!important;font-weight:700!important;',
-      'font-variant-numeric:tabular-nums;letter-spacing:-.4px;}',
-
-      /* ---- section heading ---- */
-      '#sectionheading,.payInfoDiv{background:transparent!important;border:0!important;',
-      'padding:22px 18px 10px!important;}',
-      '.heading-text{color:var(--faint)!important;font-size:11.5px!important;font-weight:600!important;',
-      'letter-spacing:1.1px!important;text-transform:uppercase;}',
-
-      /* ---- payment rows: colour ONLY. No display, no layout. Their CSS
-             decides which of the two spans is visible. ---- */
-      'ul{list-style:none!important;margin:0 14px!important;padding:0!important;}',
-      'li{margin:0 0 10px!important;}',
-      'span.paymentOption{background:var(--surf)!important;color:var(--txt)!important;',
-      'border:1px solid var(--line)!important;border-radius:16px!important;',
-      'font-size:15.5px!important;font-weight:500!important;}',
-      'span.right-arrow{padding:18px 46px 18px 20px!important;position:relative!important;}',
-      'span.right-arrow:after{content:"";position:absolute;right:20px;top:50%;',
-      'width:8px;height:8px;border-right:2px solid var(--faint);border-bottom:2px solid var(--faint);',
-      'transform:translateY(-50%) rotate(-45deg);}',
-
-      /* ---- selects and their options (the bank list lives here) ---- */
-      'select{background:var(--surf2)!important;color:var(--txt)!important;',
-      'border:1px solid var(--line)!important;border-radius:12px!important;',
-      'padding:13px 14px!important;font-size:15px!important;}',
-      'option,option.ACTI,option.NBBL-N{background:#1B1D21!important;color:#FFFFFF!important;',
-      'border-radius:0!important;padding:0!important;}',
-
-      /* ---- REAL buttons only: by tag/id, never by .primary-button-bg ---- */
-      'input[type=submit],button,a.SubmitBillShip,a.primary-button,#makePaymentNbk,#continue-pay-btn{',
-      'background:#FFFFFF!important;color:#0A0A0B!important;border:0!important;',
-      'border-radius:14px!important;padding:16px 22px!important;font-weight:650!important;',
-      'font-size:15.5px!important;display:inline-block;text-align:center;}',
-      'input[type=submit],button{width:auto;}',
-      'a.SubmitBillShip *,a.primary-button *,#makePaymentNbk *{color:#0A0A0B!important;}',
-      'a:not(.SubmitBillShip):not(.primary-button){color:var(--txt)!important;}',
-
-      /* ---- text inputs ---- */
-      'input[type=text],input[type=tel],input[type=number],input[type=password],textarea{',
-      'background:var(--surf2)!important;color:var(--txt)!important;',
-      'border:1px solid var(--line)!important;border-radius:12px!important;',
-      'padding:14px 15px!important;font-size:15.5px!important;}',
-      'input::placeholder,textarea::placeholder{color:var(--faint)!important;}',
-      'input:focus,select:focus,textarea:focus{outline:0!important;border-color:#5A5F68!important;}',
-
-      /* ---- UPI waiting ---- */
-      '.upi-waiting{background:var(--surf)!important;border-radius:16px!important;color:var(--txt)!important;}',
-
-      /* ---- only the footer trust marks get a light chip; do NOT blanket-style
-             every img or bank shortcuts turn into grey blocks ---- */
-      'img[src*="verified"],img[src*="rupay"],img[src*="pci"],img[src*="mastercard"],img[src*="visa"],',
-      'img[src*="safekey"]{background:#FFFFFF!important;border-radius:6px!important;',
-      'padding:3px 5px!important;max-height:24px!important;width:auto!important;}',
-      'img[src=""],img:not([src]){display:none!important;}',
-
-      /* ---- layout polish -------------------------------------------------- */
-      /* order id + language sat on top of each other; make it one tidy row */
-      '#orderinfo{display:flex!important;align-items:center!important;',
-      'justify-content:space-between!important;gap:12px!important;flex-wrap:nowrap!important;}',
-      '#orderinfo>span{width:auto!important;float:none!important;margin:0!important;}',
-      '#orderinfo .language{flex:0 0 auto!important;}',
-      '#pagelanguageSelect,#orderinfo select{min-width:104px!important;padding:9px 12px!important;}',
-
-      /* generous card rhythm */
-      '.row-fluid{margin:0!important;}',
-      '#ordertotal,#orderAmt{padding:16px 18px!important;border-radius:18px!important;',
-      'border:1px solid var(--line)!important;margin:6px 14px 0!important;}',
-
-      /* payment rows sit closer to a native list */
-      'li{margin:0 0 12px!important;}',
-      'span.right-arrow{padding:20px 48px 20px 20px!important;}',
-
-      /* ---- bank shortcuts: their logos are CSS background images built for a
-             LIGHT ground, so keep them light but make it look intentional —
-             a white chip rather than a stray grey slab. ---- */
-      'span.topNetBank.popularBanks{background-color:#FFFFFF!important;',
-      'border:1px solid #D9DCE1!important;border-radius:14px!important;',
-      'width:auto!important;display:block!important;margin:0 14px 10px!important;',
-      'min-height:58px!important;background-position:56px center!important;',
-      'background-size:auto 26px!important;background-repeat:no-repeat!important;}',
-      'input.radio.topNetBank{margin:0 0 0 18px!important;width:20px!important;height:20px!important;',
-      'accent-color:#0A0A0B!important;vertical-align:middle!important;}',
-
-      /* "All Other Banks" select was clipping its label */
-      '#netBankingBank,select.payoptselect{height:auto!important;min-height:52px!important;',
-      'line-height:1.4!important;padding:15px 16px!important;border-radius:14px!important;',
-      'margin:0 14px!important;width:calc(100% - 28px)!important;',
-      '-webkit-appearance:none!important;appearance:none!important;',
-      'background-image:linear-gradient(45deg,transparent 50%,#9AA1AD 50%),',
-      'linear-gradient(135deg,#9AA1AD 50%,transparent 50%)!important;',
-      'background-position:calc(100% - 22px) 24px,calc(100% - 16px) 24px!important;',
-      'background-size:6px 6px,6px 6px!important;background-repeat:no-repeat!important;}',
-      '.all-other-banks .content-text{padding:0 16px!important;display:block!important;',
-      'margin:18px 0 8px!important;font-size:11.5px!important;letter-spacing:1px!important;',
-      'text-transform:uppercase!important;color:var(--faint)!important;}',
-
-      /* note / consent copy */
-      '.content-text{padding-left:16px!important;padding-right:16px!important;}',
-
-      /* stray broken-image placeholders CCAvenue ships with empty src */
-      '#nbbl-bank-logo,img[src=""],img:not([src]),img[src$="icon-upi-app-not-found.jpg"]{',
-      'display:none!important;}',
+      /* text */
+      '.content-text,.innerpanel-text,.formText{color:#9AA1AD!important;}',
+      '.highlight,.highlight-text,.orderTotal,#finalTotal{color:#FFFFFF!important;}',
+      '.heading-text{color:#9AA1AD!important;}',
+      '#mobileno{color:#6B7280!important;}',
+      'a{color:#FFFFFF!important;}',
       '.error{color:#FF6B6B!important;}',
-      '::-webkit-scrollbar{width:0;height:0;}'
+
+      /* countdown bar — colour only, keeps its own geometry */
+      'div.transaction-time{background-color:#1B1D21!important;color:#9AA1AD!important;}',
+      'div.transaction-time strong,#whenCountdown{color:#FFFFFF!important;}',
+
+      /* payment rows — colour only */
+      'span.paymentOption{background-color:#141518!important;color:#FFFFFF!important;',
+      'border-color:#26282D!important;}',
+
+      /* fields — colour only */
+      'input[type=text],input[type=tel],input[type=number],input[type=password],',
+      'select,textarea{background-color:#1B1D21!important;color:#FFFFFF!important;',
+      'border-color:#26282D!important;}',
+      'option{background-color:#1B1D21!important;color:#FFFFFF!important;}',
+      'input::placeholder,textarea::placeholder{color:#6B7280!important;}',
+
+      /* redundant merchant banner (our own header shows the same thing) and
+         placeholders CCAvenue ships with an empty src */
+      '#logo,.header-bg.banner{display:none!important;}',
+      '#nbbl-bank-logo,img[src=""],img:not([src]){display:none!important;}'
     ].join('');
     document.head.appendChild(st);
   } catch (e) {
