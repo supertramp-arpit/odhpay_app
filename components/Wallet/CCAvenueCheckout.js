@@ -111,7 +111,20 @@ const CCAV_RESTYLE_JS = `
       '.highlight,.highlight-text,.orderTotal,#finalTotal{color:#FFFFFF!important;}',
       '.heading-text{color:#9AA1AD!important;}',
       '#mobileno{color:#6B7280!important;}',
-      'a{color:#FFFFFF!important;}',
+      /* Links are white on the dark ground — but NOT buttons. CCAvenue's
+         buttons keep their own light background, so white text on them is
+         invisible (this is what hid "Pay By Any UPI App"). */
+      'a:not([class*="button"]):not([class*="btn"]){color:#FFFFFF!important;}',
+
+      /* '.primary-button-text' is worn by three different things:
+           - real buttons        -> light bg, so the label must be DARK
+           - payment option rows -> we made those dark, so label stays WHITE
+           - the countdown bar   -> we made that dark, so label stays MUTED
+         Exclude the latter two or they go dark-on-dark and vanish. */
+      '.primary-button-text:not(.paymentOption):not(.transaction-time){',
+      'color:#0A0A0B!important;}',
+      '.primary-button-text:not(.paymentOption):not(.transaction-time) *{',
+      'color:#0A0A0B!important;}',
       '.error{color:#FF6B6B!important;}',
 
       /* countdown bar — colour only, keeps its own geometry */
