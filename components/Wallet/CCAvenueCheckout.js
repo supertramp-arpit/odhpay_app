@@ -77,48 +77,118 @@ const CCAV_RESTYLE_JS = `
     if (!/(^|\\.)ccavenue\\.com$/i.test(location.hostname)) return;
     if (document.getElementById('odhpay-skin')) return;
 
-    var css = document.createElement('style');
-    css.id = 'odhpay-skin';
-    css.innerHTML = [
-      ':root{--odh-ink:#0A0A0B;--odh-bg:#F7F8FA;--odh-surface:#FFFFFF;',
-      '--odh-line:#E4E7EC;--odh-muted:#6B7280;}',
+    var st = document.createElement('style');
+    st.id = 'odhpay-skin';
+    st.innerHTML = [
+      /* ================= ODH Pay dark checkout skin =================
+         Selectors are taken from CCAvenue's live markup. CSS only — no DOM
+         reads/writes beyond appending this one <style> node. ============= */
 
-      'html,body{background:var(--odh-bg)!important;color:var(--odh-ink)!important;',
-      '-webkit-font-smoothing:antialiased;font-family:-apple-system,Roboto,"Segoe UI",sans-serif!important;}',
+      ':root{color-scheme:dark;',
+      '--bg:#0A0A0B;--surf:#141518;--surf2:#1B1D21;--line:#26282D;',
+      '--txt:#FFFFFF;--muted:#9AA1AD;--faint:#6B7280;--accent:#FFFFFF;}',
 
-      /* Panels and cards */
-      'table,fieldset,.panel,.box,.container,.content{background:var(--odh-surface)!important;',
-      'border-color:var(--odh-line)!important;}',
+      'html,body{background:var(--bg)!important;color:var(--txt)!important;',
+      'font-family:-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif!important;',
+      'font-size:15px!important;line-height:1.5!important;-webkit-font-smoothing:antialiased;}',
+      '*{box-shadow:none!important;text-shadow:none!important;}',
 
-      /* Kill the loud default blues/greens for a monochrome look */
-      'a{color:var(--odh-ink)!important;text-decoration:underline;}',
-      'h1,h2,h3,h4,legend,label,td,th,p,span,div{color:inherit;}',
+      /* every generic container inherits the dark ground */
+      'div,section,table,td,th,tr,form,ul,li,span,p,label,fieldset{',
+      'background-color:transparent!important;border-color:var(--line)!important;}',
+      '.content-bg,.innerpanel-bg,.billingPage{background-color:var(--surf)!important;}',
+      '.content-text,.innerpanel-text,.formText{color:var(--muted)!important;}',
+      '.highlight,.highlight-text{color:var(--txt)!important;}',
+      '.border{border:1px solid var(--line)!important;}',
+      '.divider{border-color:var(--line)!important;opacity:.6;}',
+      '.radius4,.radius6{border-radius:16px!important;}',
 
-      /* The timeout banner: keep it visible, tone it down */
-      '[class*="timer"],[id*="timer"],[class*="timeout"],[id*="timeout"]{',
-      'background:#EEF0F3!important;color:var(--odh-ink)!important;border:0!important;}',
+      /* ---- merchant banner: redundant, our own header carries context ---- */
+      '#logo,.header-bg.banner{display:none!important;}',
 
-      /* Payment-option rows -> app-like list items */
-      'li,.payOpt,[class*="payment"] li,[id*="payOpt"]{border-color:var(--odh-line)!important;}',
-      'li:hover{background:#F4F5F7!important;}',
+      /* ---- countdown: quiet chip ---- */
+      '.transaction-time{background:var(--surf2)!important;color:var(--muted)!important;',
+      'border:1px solid var(--line)!important;border-radius:999px!important;',
+      'font-size:12px!important;padding:7px 15px!important;margin:16px auto 6px!important;',
+      'display:block!important;width:-webkit-fit-content!important;width:fit-content!important;}',
+      '.transaction-time strong,#whenCountdown{color:var(--txt)!important;font-weight:600!important;',
+      'font-variant-numeric:tabular-nums;}',
 
-      /* Primary actions -> ink buttons */
-      'input[type=submit],button,.btn,.button{background:var(--odh-ink)!important;',
-      'color:#fff!important;border:0!important;border-radius:12px!important;',
-      'padding:12px 18px!important;font-weight:600!important;box-shadow:none!important;}',
+      /* ---- order id + language ---- */
+      '#orderinfo{background:transparent!important;border:0!important;',
+      'padding:4px 18px 12px!important;display:flex!important;align-items:center!important;',
+      'justify-content:space-between!important;}',
+      '#mobileno{color:var(--faint)!important;font-size:11px!important;letter-spacing:.4px;',
+      'font-variant-numeric:tabular-nums;width:auto!important;}',
+      '#orderinfo .language{width:auto!important;}',
 
-      /* Inputs */
-      'input[type=text],input[type=tel],input[type=number],input[type=password],select{',
-      'border:1px solid var(--odh-line)!important;border-radius:10px!important;',
-      'padding:10px 12px!important;background:#fff!important;color:var(--odh-ink)!important;}',
+      /* ---- amount card ---- */
+      '#ordertotal,#orderAmt,#grandtotal,#amount{background:var(--surf)!important;}',
+      '#grandtotal{border-top:1px solid var(--line)!important;margin-top:10px!important;',
+      'padding-top:14px!important;}',
+      '#grandtotal .innerpanel-text{color:var(--txt)!important;font-weight:600!important;font-size:15px!important;}',
+      '#finalTotal,.orderTotal{color:var(--txt)!important;font-variant-numeric:tabular-nums;',
+      'letter-spacing:-.4px;}',
+      '#finalTotal{font-size:22px!important;font-weight:700!important;}',
 
-      /* Their broken asset placeholders */
+      /* ---- section heading ---- */
+      '#sectionheading,.payInfoDiv{background:transparent!important;border:0!important;',
+      'padding:22px 18px 10px!important;}',
+      '.heading-text{color:var(--faint)!important;font-size:11.5px!important;font-weight:600!important;',
+      'letter-spacing:1.1px!important;text-transform:uppercase;}',
+
+      /* ---- payment option rows ---- */
+      'ul{list-style:none!important;margin:0 14px!important;padding:0!important;}',
+      'li{margin:0 0 12px!important;}',
+      '#OPTNBK,#OPTUPI,#OPTWLT{border-radius:16px!important;overflow:hidden!important;}',
+      'span.paymentOption{display:block!important;background:var(--surf)!important;',
+      'color:var(--txt)!important;border:1px solid var(--line)!important;border-radius:16px!important;',
+      'padding:19px 48px 19px 20px!important;font-size:15.5px!important;font-weight:500!important;',
+      'letter-spacing:-.1px;position:relative!important;text-align:left!important;',
+      'transition:background .15s ease,border-color .15s ease;}',
+      'span.paymentOption:active{background:var(--surf2)!important;border-color:#3A3D44!important;}',
+      'span.right-arrow:after{content:"";position:absolute;right:20px;top:50%;',
+      'width:8px;height:8px;border-right:2px solid var(--faint);border-bottom:2px solid var(--faint);',
+      'transform:translateY(-50%) rotate(-45deg);}',
+
+      /* ---- bank / netbanking lists ---- */
+      '.topNetBank,.ACTI,.NBBL-N{background:var(--surf)!important;color:var(--txt)!important;',
+      'border-color:var(--line)!important;border-radius:14px!important;}',
+
+      /* ---- buttons: inverted for a premium dark look ---- */
+      '.primary-button,.primary-button-bg,input[type=submit],button,.btn{',
+      'background:var(--accent)!important;color:#0A0A0B!important;border:0!important;',
+      'border-radius:16px!important;padding:16px 22px!important;font-weight:650!important;',
+      'font-size:15.5px!important;letter-spacing:-.1px;}',
+      '.primary-button-text{color:#0A0A0B!important;}',
+      'a,.primary-link{color:var(--txt)!important;}',
+
+      /* ---- inputs ---- */
+      'input[type=text],input[type=tel],input[type=number],input[type=password],select,textarea{',
+      'background:var(--surf2)!important;color:var(--txt)!important;',
+      'border:1px solid var(--line)!important;border-radius:14px!important;',
+      'padding:15px 16px!important;font-size:15.5px!important;}',
+      'input::placeholder,textarea::placeholder{color:var(--faint)!important;}',
+      'input:focus,select:focus,textarea:focus{outline:0!important;border-color:#5A5F68!important;}',
+
+      /* ---- UPI / QR waiting states ---- */
+      '.upi-waiting{background:var(--surf)!important;border-radius:16px!important;color:var(--txt)!important;}',
+
+      /* ---- third-party marks are dark artwork on transparent: give them a
+             light chip so they stay legible on black ---- */
+      '.upilogos img,#nbbl-bank-logo,img[src*="logo"],img[src*="card"],img[src*="bank"]{',
+      'background:#FFFFFF!important;border-radius:8px!important;padding:5px 7px!important;',
+      'max-height:30px!important;width:auto!important;}',
       'img[src=""],img:not([src]){display:none!important;}',
 
-      /* Tighter rhythm on small screens */
-      'body{font-size:15px!important;line-height:1.5!important;}'
+      /* ---- errors ---- */
+      '.error{color:#FF6B6B!important;}',
+
+      /* ---- scrollbar ---- */
+      '::-webkit-scrollbar{width:0;height:0;}',
+      'body>.row-fluid:first-child{margin-top:0!important;}'
     ].join('');
-    document.head.appendChild(css);
+    document.head.appendChild(st);
   } catch (e) {
     /* styling must never break the payment page */
   }
@@ -313,7 +383,7 @@ export default function CCAvenueCheckout({ visible, amount, servicePayload, onCl
           accessibilityRole="button"
           accessibilityLabel="Close payment"
         >
-          <X size={22} color={color.text} strokeWidth={1.75} />
+          <X size={22} color={DARK.text} strokeWidth={1.75} />
         </TouchableOpacity>
       ) : (
         <View style={styles.headerClose} />
@@ -323,7 +393,7 @@ export default function CCAvenueCheckout({ visible, amount, servicePayload, onCl
 
   const renderBusy = (title, caption) => (
     <View style={styles.centered}>
-      <ActivityIndicator size="large" color={color.ink900} />
+      <ActivityIndicator size="large" color={DARK.text} />
       <Text style={styles.busyTitle}>{title}</Text>
       <Text style={styles.busyCaption}>{caption}</Text>
       <View style={styles.amountPill}>
@@ -339,16 +409,16 @@ export default function CCAvenueCheckout({ visible, amount, servicePayload, onCl
     const success = status === "SUCCESS";
 
     let Icon = Clock;
-    let iconColor = color.warningFg;
-    let iconBg = color.warningBg;
+    let iconColor = "#FBBF24";
+    let iconBg = "rgba(245,158,11,0.14)";
     let title = "Payment is still processing";
     let body =
       "We haven't had final confirmation from the bank yet. If money was debited it will be added automatically — no need to pay again.";
 
     if (success) {
       Icon = CheckCircle2;
-      iconColor = color.successFg;
-      iconBg = color.successBg;
+      iconColor = "#34D399";
+      iconBg = "rgba(16,185,129,0.14)";
       if (servicePayload) {
         title = "Payment successful";
         // The payment is confirmed; the recharge/bill is dispatched right after
@@ -362,8 +432,8 @@ export default function CCAvenueCheckout({ visible, amount, servicePayload, onCl
       }
     } else if (failed) {
       Icon = XCircle;
-      iconColor = color.errorFg;
-      iconBg = color.errorBg;
+      iconColor = "#F87171";
+      iconBg = "rgba(239,68,68,0.14)";
       title = error ? "Couldn't start payment" : "Payment failed";
       body =
         error ||
@@ -371,8 +441,8 @@ export default function CCAvenueCheckout({ visible, amount, servicePayload, onCl
         "The payment didn't go through. You haven't been charged.";
     } else if (aborted) {
       Icon = XCircle;
-      iconColor = color.textSecondary;
-      iconBg = color.surfaceMuted;
+      iconColor = DARK.muted;
+      iconBg = DARK.surfaceAlt;
       title = "Payment cancelled";
       body = "You cancelled this payment. Nothing has been charged.";
     }
@@ -442,7 +512,7 @@ export default function CCAvenueCheckout({ visible, amount, servicePayload, onCl
           <>
             {renderHeader("Secure payment")}
             <View style={styles.secureStrip}>
-              <Lock size={14} color={color.textSecondary} strokeWidth={1.75} />
+              <Lock size={14} color={DARK.muted} strokeWidth={1.75} />
               <Text style={styles.secureText}>
                 Paying {formatINR(amount)} via CCAvenue
               </Text>
@@ -465,7 +535,7 @@ export default function CCAvenueCheckout({ visible, amount, servicePayload, onCl
               setSupportMultipleWindows={false}
               renderLoading={() => (
                 <View style={styles.webviewLoader}>
-                  <ActivityIndicator size="large" color={color.ink900} />
+                  <ActivityIndicator size="large" color={DARK.text} />
                 </View>
               )}
               // UPI intent links must leave the WebView or the UPI app never opens.
@@ -527,20 +597,32 @@ export default function CCAvenueCheckout({ visible, amount, servicePayload, onCl
   );
 }
 
+// The embedded CCAvenue page is skinned dark (CCAV_RESTYLE_JS), so this screen's
+// own chrome is dark too — otherwise the modal reads as two stacked apps.
+const DARK = {
+  bg: "#0A0A0B",
+  surface: "#141518",
+  surfaceAlt: "#1B1D21",
+  line: "#26282D",
+  text: "#FFFFFF",
+  muted: "#9AA1AD",
+  faint: "#6B7280",
+};
+
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: color.background },
+  screen: { flex: 1, backgroundColor: DARK.bg },
 
   header: {
-    height: 56,
+    height: 60,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: space.lg,
-    backgroundColor: color.surface,
+    backgroundColor: DARK.bg,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: color.border,
+    borderBottomColor: DARK.line,
   },
-  headerTitle: { ...type.h3, color: color.text, flex: 1 },
+  headerTitle: { ...type.h3, color: DARK.text, flex: 1, letterSpacing: -0.3 },
   headerClose: {
     width: 44,
     height: 44,
@@ -554,16 +636,18 @@ const styles = StyleSheet.create({
     gap: space.sm,
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
-    backgroundColor: color.surfaceMuted,
+    backgroundColor: DARK.surface,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: DARK.line,
   },
-  secureText: { ...type.bodySm, ...tabularNums, color: color.textSecondary },
+  secureText: { ...type.bodySm, ...tabularNums, color: DARK.muted, letterSpacing: 0.1 },
 
-  webview: { flex: 1, backgroundColor: color.background },
+  webview: { flex: 1, backgroundColor: DARK.bg },
   webviewLoader: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: color.background,
+    backgroundColor: DARK.bg,
   },
 
   centered: {
@@ -572,10 +656,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: space.xl,
   },
-  busyTitle: { ...type.h3, color: color.text, marginTop: space.lg, textAlign: "center" },
+  busyTitle: { ...type.h3, color: DARK.text, marginTop: space.lg, textAlign: "center" },
   busyCaption: {
     ...type.body,
-    color: color.textSecondary,
+    color: DARK.muted,
     marginTop: space.sm,
     textAlign: "center",
   },
@@ -584,9 +668,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.base,
     paddingVertical: space.sm,
     borderRadius: radius.pill,
-    backgroundColor: color.surfaceMuted,
+    backgroundColor: DARK.surfaceAlt,
+    borderWidth: 1,
+    borderColor: DARK.line,
   },
-  amountPillText: { ...type.label, ...tabularNums, color: color.text },
+  amountPillText: { ...type.label, ...tabularNums, color: DARK.text },
 
   resultIcon: {
     width: 72,
@@ -597,20 +683,20 @@ const styles = StyleSheet.create({
   },
   resultTitle: {
     ...type.h2,
-    color: color.text,
+    color: DARK.text,
     marginTop: space.lg,
     textAlign: "center",
   },
   resultBody: {
     ...type.body,
-    color: color.textSecondary,
+    color: DARK.muted,
     marginTop: space.sm,
     textAlign: "center",
   },
   resultAmount: {
     ...type.display,
     ...tabularNums,
-    color: color.moneyCredit,
+    color: "#34D399",
     marginTop: space.lg,
   },
 
@@ -622,10 +708,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.base,
     paddingVertical: space.sm,
     borderRadius: radius.sm,
-    backgroundColor: color.surfaceMuted,
+    backgroundColor: DARK.surfaceAlt,
   },
-  refLabel: { ...type.caption, color: color.textTertiary },
-  refValue: { ...type.caption, ...tabularNums, color: color.textSecondary },
+  refLabel: { ...type.caption, color: DARK.faint },
+  refValue: { ...type.caption, ...tabularNums, color: DARK.muted },
 
   actions: {
     position: "absolute",
@@ -639,21 +725,21 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 52,
     borderRadius: radius.md,
-    backgroundColor: color.ink900,
+    backgroundColor: DARK.text,
     alignItems: "center",
     justifyContent: "center",
     ...(Platform.OS === "ios" ? elevation.level1 : null),
   },
-  primaryBtnText: { ...type.button, color: color.textInverse },
+  primaryBtnText: { ...type.button, color: DARK.bg },
   secondaryBtn: {
     flex: 1,
     height: 52,
     borderRadius: radius.md,
-    backgroundColor: color.surface,
+    backgroundColor: DARK.surfaceAlt,
     borderWidth: 1,
-    borderColor: color.borderStrong,
+    borderColor: DARK.line,
     alignItems: "center",
     justifyContent: "center",
   },
-  secondaryBtnText: { ...type.button, color: color.text },
+  secondaryBtnText: { ...type.button, color: DARK.text },
 });
