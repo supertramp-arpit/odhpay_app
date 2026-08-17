@@ -80,56 +80,57 @@ const CCAV_RESTYLE_JS = `
     var st = document.createElement('style');
     st.id = 'odhpay-skin';
     st.innerHTML = [
-      /* ================= ODH Pay dark checkout skin =================
-         Selectors are taken from CCAvenue's live markup. CSS only — no DOM
-         reads/writes beyond appending this one <style> node. ============= */
+      /* ============ ODH Pay dark skin for CCAvenue checkout ============
+         HARD RULES (learned the hard way):
+         1. NEVER set 'display' on their elements. Each payment row holds TWO
+            spans (active + inactive) and their own CSS hides one; forcing
+            display duplicates every row.
+         2. '.primary-button-bg' is NOT only buttons — the countdown bar and the
+            bank shortcuts use it too. Style real buttons by tag/id instead.
+         3. '.ACTI' / '.NBBL-N' are <option> elements in the bank <select>,
+            not list rows.
+         CSS only; no DOM reads/writes beyond this <style> node.          ==== */
 
       ':root{color-scheme:dark;',
       '--bg:#0A0A0B;--surf:#141518;--surf2:#1B1D21;--line:#26282D;',
-      '--txt:#FFFFFF;--muted:#9AA1AD;--faint:#6B7280;--accent:#FFFFFF;}',
+      '--txt:#FFFFFF;--muted:#9AA1AD;--faint:#6B7280;}',
 
       'html,body{background:var(--bg)!important;color:var(--txt)!important;',
       'font-family:-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif!important;',
       'font-size:15px!important;line-height:1.5!important;-webkit-font-smoothing:antialiased;}',
       '*{box-shadow:none!important;text-shadow:none!important;}',
 
-      /* every generic container inherits the dark ground */
-      'div,section,table,td,th,tr,form,ul,li,span,p,label,fieldset{',
+      'div,section,table,td,th,tr,form,ul,li,p,label,fieldset{',
       'background-color:transparent!important;border-color:var(--line)!important;}',
       '.content-bg,.innerpanel-bg,.billingPage{background-color:var(--surf)!important;}',
       '.content-text,.innerpanel-text,.formText{color:var(--muted)!important;}',
-      '.highlight,.highlight-text{color:var(--txt)!important;}',
+      '.highlight,.highlight-text,.orderTotal{color:var(--txt)!important;}',
       '.border{border:1px solid var(--line)!important;}',
-      '.divider{border-color:var(--line)!important;opacity:.6;}',
+      '.divider{border-color:var(--line)!important;opacity:.5;}',
       '.radius4,.radius6{border-radius:16px!important;}',
 
-      /* ---- merchant banner: redundant, our own header carries context ---- */
+      /* merchant banner — our own header already carries the context */
       '#logo,.header-bg.banner{display:none!important;}',
 
-      /* ---- countdown: quiet chip ---- */
-      '.transaction-time{background:var(--surf2)!important;color:var(--muted)!important;',
+      /* ---- countdown pill (must beat .primary-button-bg, hence the id) ---- */
+      'div.transaction-time{background:var(--surf2)!important;color:var(--muted)!important;',
       'border:1px solid var(--line)!important;border-radius:999px!important;',
-      'font-size:12px!important;padding:7px 15px!important;margin:16px auto 6px!important;',
-      'display:block!important;width:-webkit-fit-content!important;width:fit-content!important;}',
-      '.transaction-time strong,#whenCountdown{color:var(--txt)!important;font-weight:600!important;',
-      'font-variant-numeric:tabular-nums;}',
+      'font-size:12px!important;font-weight:400!important;padding:7px 15px!important;',
+      'margin:16px auto 6px!important;width:-webkit-fit-content!important;width:fit-content!important;}',
+      'div.transaction-time strong,#whenCountdown{color:var(--txt)!important;',
+      'font-weight:600!important;font-variant-numeric:tabular-nums;}',
 
       /* ---- order id + language ---- */
-      '#orderinfo{background:transparent!important;border:0!important;',
-      'padding:4px 18px 12px!important;display:flex!important;align-items:center!important;',
-      'justify-content:space-between!important;}',
+      '#orderinfo{background:transparent!important;border:0!important;padding:4px 18px 12px!important;}',
       '#mobileno{color:var(--faint)!important;font-size:11px!important;letter-spacing:.4px;',
-      'font-variant-numeric:tabular-nums;width:auto!important;}',
-      '#orderinfo .language{width:auto!important;}',
+      'font-variant-numeric:tabular-nums;}',
 
-      /* ---- amount card ---- */
+      /* ---- totals ---- */
       '#ordertotal,#orderAmt,#grandtotal,#amount{background:var(--surf)!important;}',
-      '#grandtotal{border-top:1px solid var(--line)!important;margin-top:10px!important;',
-      'padding-top:14px!important;}',
-      '#grandtotal .innerpanel-text{color:var(--txt)!important;font-weight:600!important;font-size:15px!important;}',
-      '#finalTotal,.orderTotal{color:var(--txt)!important;font-variant-numeric:tabular-nums;',
-      'letter-spacing:-.4px;}',
-      '#finalTotal{font-size:22px!important;font-weight:700!important;}',
+      '#grandtotal{border-top:1px solid var(--line)!important;margin-top:10px!important;padding-top:14px!important;}',
+      '#grandtotal .innerpanel-text{color:var(--txt)!important;font-weight:600!important;}',
+      '#finalTotal{color:var(--txt)!important;font-size:21px!important;font-weight:700!important;',
+      'font-variant-numeric:tabular-nums;letter-spacing:-.4px;}',
 
       /* ---- section heading ---- */
       '#sectionheading,.payInfoDiv{background:transparent!important;border:0!important;',
@@ -137,56 +138,54 @@ const CCAV_RESTYLE_JS = `
       '.heading-text{color:var(--faint)!important;font-size:11.5px!important;font-weight:600!important;',
       'letter-spacing:1.1px!important;text-transform:uppercase;}',
 
-      /* ---- payment option rows ---- */
+      /* ---- payment rows: colour ONLY. No display, no layout. Their CSS
+             decides which of the two spans is visible. ---- */
       'ul{list-style:none!important;margin:0 14px!important;padding:0!important;}',
-      'li{margin:0 0 12px!important;}',
-      '#OPTNBK,#OPTUPI,#OPTWLT{border-radius:16px!important;overflow:hidden!important;}',
-      'span.paymentOption{display:block!important;background:var(--surf)!important;',
-      'color:var(--txt)!important;border:1px solid var(--line)!important;border-radius:16px!important;',
-      'padding:19px 48px 19px 20px!important;font-size:15.5px!important;font-weight:500!important;',
-      'letter-spacing:-.1px;position:relative!important;text-align:left!important;',
-      'transition:background .15s ease,border-color .15s ease;}',
-      'span.paymentOption:active{background:var(--surf2)!important;border-color:#3A3D44!important;}',
+      'li{margin:0 0 10px!important;}',
+      'span.paymentOption{background:var(--surf)!important;color:var(--txt)!important;',
+      'border:1px solid var(--line)!important;border-radius:16px!important;',
+      'font-size:15.5px!important;font-weight:500!important;}',
+      'span.right-arrow{padding:18px 46px 18px 20px!important;position:relative!important;}',
       'span.right-arrow:after{content:"";position:absolute;right:20px;top:50%;',
       'width:8px;height:8px;border-right:2px solid var(--faint);border-bottom:2px solid var(--faint);',
       'transform:translateY(-50%) rotate(-45deg);}',
 
-      /* ---- bank / netbanking lists ---- */
-      '.topNetBank,.ACTI,.NBBL-N{background:var(--surf)!important;color:var(--txt)!important;',
-      'border-color:var(--line)!important;border-radius:14px!important;}',
+      /* ---- selects and their options (the bank list lives here) ---- */
+      'select{background:var(--surf2)!important;color:var(--txt)!important;',
+      'border:1px solid var(--line)!important;border-radius:12px!important;',
+      'padding:13px 14px!important;font-size:15px!important;}',
+      'option,option.ACTI,option.NBBL-N{background:#1B1D21!important;color:#FFFFFF!important;',
+      'border-radius:0!important;padding:0!important;}',
 
-      /* ---- buttons: inverted for a premium dark look ---- */
-      '.primary-button,.primary-button-bg,input[type=submit],button,.btn{',
-      'background:var(--accent)!important;color:#0A0A0B!important;border:0!important;',
-      'border-radius:16px!important;padding:16px 22px!important;font-weight:650!important;',
-      'font-size:15.5px!important;letter-spacing:-.1px;}',
-      '.primary-button-text{color:#0A0A0B!important;}',
-      'a,.primary-link{color:var(--txt)!important;}',
+      /* ---- REAL buttons only: by tag/id, never by .primary-button-bg ---- */
+      'input[type=submit],button,a.SubmitBillShip,a.primary-button,#makePaymentNbk,#continue-pay-btn{',
+      'background:#FFFFFF!important;color:#0A0A0B!important;border:0!important;',
+      'border-radius:14px!important;padding:16px 22px!important;font-weight:650!important;',
+      'font-size:15.5px!important;display:inline-block;text-align:center;}',
+      'input[type=submit],button{width:auto;}',
+      'a.SubmitBillShip *,a.primary-button *,#makePaymentNbk *{color:#0A0A0B!important;}',
+      'a:not(.SubmitBillShip):not(.primary-button){color:var(--txt)!important;}',
 
-      /* ---- inputs ---- */
-      'input[type=text],input[type=tel],input[type=number],input[type=password],select,textarea{',
+      /* ---- text inputs ---- */
+      'input[type=text],input[type=tel],input[type=number],input[type=password],textarea{',
       'background:var(--surf2)!important;color:var(--txt)!important;',
-      'border:1px solid var(--line)!important;border-radius:14px!important;',
-      'padding:15px 16px!important;font-size:15.5px!important;}',
+      'border:1px solid var(--line)!important;border-radius:12px!important;',
+      'padding:14px 15px!important;font-size:15.5px!important;}',
       'input::placeholder,textarea::placeholder{color:var(--faint)!important;}',
       'input:focus,select:focus,textarea:focus{outline:0!important;border-color:#5A5F68!important;}',
 
-      /* ---- UPI / QR waiting states ---- */
+      /* ---- UPI waiting ---- */
       '.upi-waiting{background:var(--surf)!important;border-radius:16px!important;color:var(--txt)!important;}',
 
-      /* ---- third-party marks are dark artwork on transparent: give them a
-             light chip so they stay legible on black ---- */
-      '.upilogos img,#nbbl-bank-logo,img[src*="logo"],img[src*="card"],img[src*="bank"]{',
-      'background:#FFFFFF!important;border-radius:8px!important;padding:5px 7px!important;',
-      'max-height:30px!important;width:auto!important;}',
+      /* ---- only the footer trust marks get a light chip; do NOT blanket-style
+             every img or bank shortcuts turn into grey blocks ---- */
+      'img[src*="verified"],img[src*="rupay"],img[src*="pci"],img[src*="mastercard"],img[src*="visa"],',
+      'img[src*="safekey"]{background:#FFFFFF!important;border-radius:6px!important;',
+      'padding:3px 5px!important;max-height:24px!important;width:auto!important;}',
       'img[src=""],img:not([src]){display:none!important;}',
 
-      /* ---- errors ---- */
       '.error{color:#FF6B6B!important;}',
-
-      /* ---- scrollbar ---- */
-      '::-webkit-scrollbar{width:0;height:0;}',
-      'body>.row-fluid:first-child{margin-top:0!important;}'
+      '::-webkit-scrollbar{width:0;height:0;}'
     ].join('');
     document.head.appendChild(st);
   } catch (e) {
