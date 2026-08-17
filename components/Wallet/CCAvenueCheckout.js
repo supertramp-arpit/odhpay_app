@@ -51,6 +51,81 @@ const DONE_PATH = "/api/v1/payments/ccavenue/done";
 // returns, so we keep asking rather than trusting the first answer.
 const POLL_DELAYS_MS = [600, 900, 1200, 1500, 2000, 2000, 3000, 3000, 4000, 4000, 5000, 5000];
 
+// ---------------------------------------------------------------------------
+// Cosmetic restyle of CCAvenue's hosted checkout so it doesn't read as a jump
+// out of the app.
+//
+// DELIBERATE CONSTRAINTS — read before editing:
+//   * CSS ONLY. We never read, write or reorder DOM nodes, never touch inputs,
+//     form values or hidden fields. A selector that stops matching simply has no
+//     effect; it cannot break the payment.
+//   * Domain-guarded. It applies only on *.ccavenue.com, so it never follows the
+//     customer onto a bank/3-D Secure page.
+//   * Idempotent and wrapped in try/catch — an error here must never surface to
+//     someone mid-payment.
+//   * Nothing is hidden that a customer or regulator needs: amount, order id,
+//     timeout, card-network marks and the privacy-policy link all remain.
+//
+// This page belongs to CCAvenue and is inside their PCI-DSS scope. Their markup
+// can change without notice, in which case this silently stops applying and the
+// page falls back to its own styling. Branding it properly is a M.A.R.S
+// dashboard setting; this is only a visual smoothing on top.
+// ---------------------------------------------------------------------------
+const CCAV_RESTYLE_JS = `
+(function () {
+  try {
+    if (!/(^|\\.)ccavenue\\.com$/i.test(location.hostname)) return;
+    if (document.getElementById('odhpay-skin')) return;
+
+    var css = document.createElement('style');
+    css.id = 'odhpay-skin';
+    css.innerHTML = [
+      ':root{--odh-ink:#0A0A0B;--odh-bg:#F7F8FA;--odh-surface:#FFFFFF;',
+      '--odh-line:#E4E7EC;--odh-muted:#6B7280;}',
+
+      'html,body{background:var(--odh-bg)!important;color:var(--odh-ink)!important;',
+      '-webkit-font-smoothing:antialiased;font-family:-apple-system,Roboto,"Segoe UI",sans-serif!important;}',
+
+      /* Panels and cards */
+      'table,fieldset,.panel,.box,.container,.content{background:var(--odh-surface)!important;',
+      'border-color:var(--odh-line)!important;}',
+
+      /* Kill the loud default blues/greens for a monochrome look */
+      'a{color:var(--odh-ink)!important;text-decoration:underline;}',
+      'h1,h2,h3,h4,legend,label,td,th,p,span,div{color:inherit;}',
+
+      /* The timeout banner: keep it visible, tone it down */
+      '[class*="timer"],[id*="timer"],[class*="timeout"],[id*="timeout"]{',
+      'background:#EEF0F3!important;color:var(--odh-ink)!important;border:0!important;}',
+
+      /* Payment-option rows -> app-like list items */
+      'li,.payOpt,[class*="payment"] li,[id*="payOpt"]{border-color:var(--odh-line)!important;}',
+      'li:hover{background:#F4F5F7!important;}',
+
+      /* Primary actions -> ink buttons */
+      'input[type=submit],button,.btn,.button{background:var(--odh-ink)!important;',
+      'color:#fff!important;border:0!important;border-radius:12px!important;',
+      'padding:12px 18px!important;font-weight:600!important;box-shadow:none!important;}',
+
+      /* Inputs */
+      'input[type=text],input[type=tel],input[type=number],input[type=password],select{',
+      'border:1px solid var(--odh-line)!important;border-radius:10px!important;',
+      'padding:10px 12px!important;background:#fff!important;color:var(--odh-ink)!important;}',
+
+      /* Their broken asset placeholders */
+      'img[src=""],img:not([src]){display:none!important;}',
+
+      /* Tighter rhythm on small screens */
+      'body{font-size:15px!important;line-height:1.5!important;}'
+    ].join('');
+    document.head.appendChild(css);
+  } catch (e) {
+    /* styling must never break the payment page */
+  }
+})();
+true;
+`;
+
 const PHASE = {
   CREATING: "creating",
   PAYING: "paying",
@@ -386,6 +461,7 @@ export default function CCAvenueCheckout({ visible, amount, servicePayload, onCl
               javaScriptEnabled
               domStorageEnabled
               startInLoadingState
+              injectedJavaScript={CCAV_RESTYLE_JS}
               setSupportMultipleWindows={false}
               renderLoading={() => (
                 <View style={styles.webviewLoader}>
