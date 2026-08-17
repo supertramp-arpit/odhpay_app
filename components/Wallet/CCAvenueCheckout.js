@@ -14,7 +14,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   BackHandler,
+  Linking,
   Modal,
   Platform,
   StyleSheet,
@@ -393,8 +395,34 @@ export default function CCAvenueCheckout({ visible, amount, servicePayload, onCl
               // UPI intent links must leave the WebView or the UPI app never opens.
               onShouldStartLoadWithRequest={(req) => {
                 const url = req?.url ?? "";
-                if (url.startsWith("upi://") || url.startsWith("intent://")) {
-                  return false;
+
+                // Hand UPI deep links to Android rather than the WebView.
+                // Returning false alone only BLOCKS the navigation — the URL must
+                // also be opened, or the intent is silently swallowed and the
+                // "Pay By Any UPI App" chooser never appears.
+                //
+                // Linking.openURL on a upi:// URI makes Android show the app
+                // chooser listing every installed UPI app (GPay, PhonePe, Paytm,
+                // BHIM…). The <queries> block in AndroidManifest.xml is what lets
+                // Android 11+ actually see them.
+                if (
+                  url.startsWith("upi://") ||
+                  url.startsWith("intent://") ||
+                  url.startsWith("tez://") ||
+                  url.startsWith("gpay://") ||
+                  url.startsWith("phonepe://") ||
+                  url.startsWith("paytmmp://") ||
+                  url.startsWith("credpay://") ||
+                  url.startsWith("bhim://") ||
+                  url.startsWith("mobikwik://")
+                ) {
+                  Linking.openURL(url).catch(() => {
+                    Alert.alert(
+                      "No UPI app found",
+                      "We couldn't open a UPI app on this device. Please install one, or choose another payment method."
+                    );
+                  });
+                  return false; // stop the WebView; Android takes it from here
                 }
                 return true;
               }}
