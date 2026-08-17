@@ -184,6 +184,53 @@ const CCAV_RESTYLE_JS = `
       'padding:3px 5px!important;max-height:24px!important;width:auto!important;}',
       'img[src=""],img:not([src]){display:none!important;}',
 
+      /* ---- layout polish -------------------------------------------------- */
+      /* order id + language sat on top of each other; make it one tidy row */
+      '#orderinfo{display:flex!important;align-items:center!important;',
+      'justify-content:space-between!important;gap:12px!important;flex-wrap:nowrap!important;}',
+      '#orderinfo>span{width:auto!important;float:none!important;margin:0!important;}',
+      '#orderinfo .language{flex:0 0 auto!important;}',
+      '#pagelanguageSelect,#orderinfo select{min-width:104px!important;padding:9px 12px!important;}',
+
+      /* generous card rhythm */
+      '.row-fluid{margin:0!important;}',
+      '#ordertotal,#orderAmt{padding:16px 18px!important;border-radius:18px!important;',
+      'border:1px solid var(--line)!important;margin:6px 14px 0!important;}',
+
+      /* payment rows sit closer to a native list */
+      'li{margin:0 0 12px!important;}',
+      'span.right-arrow{padding:20px 48px 20px 20px!important;}',
+
+      /* ---- bank shortcuts: their logos are CSS background images built for a
+             LIGHT ground, so keep them light but make it look intentional —
+             a white chip rather than a stray grey slab. ---- */
+      'span.topNetBank.popularBanks{background-color:#FFFFFF!important;',
+      'border:1px solid #D9DCE1!important;border-radius:14px!important;',
+      'width:auto!important;display:block!important;margin:0 14px 10px!important;',
+      'min-height:58px!important;background-position:56px center!important;',
+      'background-size:auto 26px!important;background-repeat:no-repeat!important;}',
+      'input.radio.topNetBank{margin:0 0 0 18px!important;width:20px!important;height:20px!important;',
+      'accent-color:#0A0A0B!important;vertical-align:middle!important;}',
+
+      /* "All Other Banks" select was clipping its label */
+      '#netBankingBank,select.payoptselect{height:auto!important;min-height:52px!important;',
+      'line-height:1.4!important;padding:15px 16px!important;border-radius:14px!important;',
+      'margin:0 14px!important;width:calc(100% - 28px)!important;',
+      '-webkit-appearance:none!important;appearance:none!important;',
+      'background-image:linear-gradient(45deg,transparent 50%,#9AA1AD 50%),',
+      'linear-gradient(135deg,#9AA1AD 50%,transparent 50%)!important;',
+      'background-position:calc(100% - 22px) 24px,calc(100% - 16px) 24px!important;',
+      'background-size:6px 6px,6px 6px!important;background-repeat:no-repeat!important;}',
+      '.all-other-banks .content-text{padding:0 16px!important;display:block!important;',
+      'margin:18px 0 8px!important;font-size:11.5px!important;letter-spacing:1px!important;',
+      'text-transform:uppercase!important;color:var(--faint)!important;}',
+
+      /* note / consent copy */
+      '.content-text{padding-left:16px!important;padding-right:16px!important;}',
+
+      /* stray broken-image placeholders CCAvenue ships with empty src */
+      '#nbbl-bank-logo,img[src=""],img:not([src]),img[src$="icon-upi-app-not-found.jpg"]{',
+      'display:none!important;}',
       '.error{color:#FF6B6B!important;}',
       '::-webkit-scrollbar{width:0;height:0;}'
     ].join('');
