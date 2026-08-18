@@ -17,6 +17,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Theme from "../Theme";
+import BillerLogo from "./BillerLogo";
+import { channelLimits, formatINR } from "../../utils/helper";
 
 const BillFetch = () => {
   const navigation = useNavigation();
@@ -137,8 +139,10 @@ const BillFetch = () => {
   // } else {
   //   minAmount = null;
   // };
-  let minAmount = paymentChannels?.[0]?.minAmount ? parseFloat(paymentChannels[0].minAmount) : null;
-  let maxAmount = paymentChannels?.[0]?.maxAmount ? parseFloat(paymentChannels[0].maxAmount) : null;
+  // Limits come back in paise, and per initChannel — channelLimits() picks the
+  // MOB row we actually pay on and converts to rupees. Reading
+  // paymentChannels[0] raw showed Airtel DTH's floor as "₹25000" instead of ₹250.
+  const { minAmount, maxAmount } = channelLimits(paymentChannels);
 
   // Credit-card bills: allow any amount — skip the biller's min/max channel limits.
   // Every other category keeps the limits enforced. (billerCategory is the reliable
@@ -162,12 +166,12 @@ const BillFetch = () => {
 
     // Validate min/max only if defined — but credit-card bills allow any amount.
     if (!isCreditCard && minAmount !== null && numAmount < minAmount) {
-      setErrorMessge(`Minimum amount should be ₹${minAmount}`);
+      setErrorMessge(`Minimum amount should be ${formatINR(minAmount)}`);
       return;
     }
 
     if (!isCreditCard && maxAmount !== null && numAmount > maxAmount) {
-      setErrorMessge(`Maximum amount should be ₹${maxAmount}`);
+      setErrorMessge(`Maximum amount should be ${formatINR(maxAmount)}`);
       return;
     }
 
@@ -236,12 +240,12 @@ const BillFetch = () => {
 
     // Validate min/max only if they are defined
     if (minAmount !== null && numAmount < minAmount) {
-      setErrorMessge(`Minimum amount should be ₹${minAmount}`);
+      setErrorMessge(`Minimum amount should be ${formatINR(minAmount)}`);
       return;
     }
 
     if (maxAmount !== null && numAmount > maxAmount) {
-      setErrorMessge(`Maximum amount should be ₹${maxAmount}`);
+      setErrorMessge(`Maximum amount should be ${formatINR(maxAmount)}`);
       return;
     }
 
@@ -292,11 +296,10 @@ const BillFetch = () => {
 
           <View style={styles.card}>
             <View style={styles.bankDetails}>
-              <Image
-                source={{
-                  uri: iconImage ? iconImage : "https://play-lh.googleusercontent.com/DTzWtkxfnKwFO3ruybY1SKjJQnLYeuK3KmQmwV5OQ3dULr5iXxeEtzBLceultrKTIUTr",
-                }}
-                style={styles.bankLogo}
+              <BillerLogo
+                billerId={biller_id}
+                billerName={paymentBnak}
+                size={50}
               />
               <View style={styles.bankTextContainer}>
                 <Text style={styles.bankName}>{paymentBnak}</Text>

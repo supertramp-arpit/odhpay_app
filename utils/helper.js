@@ -35,4 +35,59 @@ function formatINR(value, { decimals = 2 } = {}) {
     return `₹${sign}${grouped}${decimals > 0 ? `.${fracPart}` : ''}`;
 }
 
-export { formatDate, correctPath, normalizeIndianMobile, formatINR };
+// BBPS/BillAvenue money fields are ALL in paise — bill_amount, and the minAmount
+// / maxAmount on every entry in paymentChannels. Divide by 100 for display.
+// Airtel DTH, for example, reports minAmount 25000 / maxAmount 14999900, i.e.
+// ₹250 and ₹1,49,999 — not ₹25,000 and ₹1.5 crore.
+// Guard null/undefined/"" explicitly: Number(null) and Number("") are both 0,
+// which is finite — so a biller that publishes no maxAmount would otherwise come
+// back as a ₹0 ceiling and reject every payment.
+function paiseToRupees(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n / 100 : null;
+}
+
+// Limits for the channel we actually pay on.
+//
+// BillAvenue publishes a separate min/max per initChannel (ATM, AGT, BNKBRNCH,
+// INT, MOB, POS…) and they differ — Airtel DTH caps ATM at ₹14,999 but MOB at
+// ₹1,49,999. The bbps microservice sends <initChannel>MOB</initChannel>, so MOB
+// is the row that governs our payments. Taking paymentChannels[0] (ATM) capped
+// users ten times too low.
+//
+// Returns rupees, or null for a limit the biller doesn't publish.
+function channelLimits(paymentChannels = []) {
+    const list = Array.isArray(paymentChannels) ? paymentChannels : [];
+    const byName = (name) =>
+        list.find(
+            (c) => String(c?.paymentChannelName || '').toUpperCase() === name
+        );
+    const channel = byName('MOB') || byName('INT') || list[0] || null;
+
+    return {
+        minAmount: channel ? paiseToRupees(channel.minAmount) : null,
+        maxAmount: channel ? paiseToRupees(channel.maxAmount) : null,
+        channelName: channel?.paymentChannelName || null,
+    };
+}
+
+// Biller logos are served from the asset CDN keyed by biller id. Only ~1.2k of
+// the 22k billers have one, so callers must handle the 404 (see BillerLogo).
+// blr_image on the biller record is null for effectively every biller — use the
+// biller id, never that field.
+function billerLogoUri(billerId) {
+    return billerId
+        ? `https://assetcdn.odhpay.com/biller-assets/${billerId}.png?v=2`
+        : null;
+}
+
+export {
+    formatDate,
+    correctPath,
+    normalizeIndianMobile,
+    formatINR,
+    paiseToRupees,
+    channelLimits,
+    billerLogoUri,
+};

@@ -16,6 +16,8 @@ import axios from "axios";
 import SweetAlert from "../miscellaneous/SweetAlert";
 import { useRegisterStore } from "../../store/useRegisterStore";
 import { logBBPSFlow } from "../../utils/apiLogger";
+import { channelLimits, formatINR } from "../../utils/helper";
+import BillerLogo from "./BillerLogo";
 
 // Operators database
 const ALL_OPERATORS = [
@@ -114,19 +116,13 @@ const ProceedToPayment = () => {
   const [minAmount, setMinAmount] = useState(1);
   const [maxAmount, setMaxAmount] = useState(Infinity);
 
-  // Extract min/max amount from paymentChannels - default to UPI
+  // Extract min/max for the channel we pay on (MOB), converting from the paise
+  // BillAvenue publishes. Without the conversion these read 100x too high — a
+  // ₹250 floor showed as "₹25000".
   useEffect(() => {
-    if (paymentChannels && paymentChannels.length > 0) {
-      // Find UPI channel, fallback to first channel
-      const upiChannel = paymentChannels.find(
-        (channel) => channel?.paymentChannelName?.toUpperCase() === "UPI" || channel?.paymentChannelName?.toUpperCase() === "MOB"
-      ) || paymentChannels[0];
-
-      if (upiChannel) {
-        setMinAmount(upiChannel.minAmount || 1);
-        setMaxAmount(upiChannel.maxAmount || Infinity);
-      }
-    }
+    const { minAmount: min, maxAmount: max } = channelLimits(paymentChannels);
+    setMinAmount(min ?? 1);
+    setMaxAmount(max ?? Infinity);
   }, [paymentChannels]);
 
   const handleInputChange = (paramName, value) => {
@@ -184,9 +180,9 @@ const ProceedToPayment = () => {
           if (isNaN(numAmount)) {
             newErrors[key] = "Please enter a valid amount";
           } else if (numAmount < minAmount) {
-            newErrors[key] = `Minimum amount is ₹${minAmount}`;
+            newErrors[key] = `Minimum amount is ${formatINR(minAmount)}`;
           } else if (numAmount > maxAmount) {
-            newErrors[key] = `Maximum amount is ₹${maxAmount}`;
+            newErrors[key] = `Maximum amount is ${formatINR(maxAmount)}`;
           }
         } else {
           // Regular validation for other fields
@@ -406,9 +402,9 @@ const ProceedToPayment = () => {
           if (isNaN(numAmount)) {
             newErrors[key] = "Please enter a valid amount";
           } else if (numAmount < minAmount) {
-            newErrors[key] = `Minimum amount is ₹${minAmount}`;
+            newErrors[key] = `Minimum amount is ${formatINR(minAmount)}`;
           } else if (numAmount > maxAmount) {
-            newErrors[key] = `Maximum amount is ₹${maxAmount}`;
+            newErrors[key] = `Maximum amount is ${formatINR(maxAmount)}`;
           }
         } else {
           // Regular validation for other fields
@@ -543,7 +539,7 @@ const ProceedToPayment = () => {
   return (
     <View style={styles.container}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-        {iconImage && (<Image style={{ width: 37, height: 37 }} source={{ uri: iconImage }} />)}
+        <BillerLogo billerId={biller_id} billerName={paymentBnak} size={37} />
         <Text style={styles.header}>{paymentBnak}</Text>
       </View>
 
@@ -563,7 +559,9 @@ const ProceedToPayment = () => {
                   styles.input,
                   errors[field.paramName] ? styles.errorBorder : null,
                 ]}
-                placeholder={`Min: ₹${minAmount} | Max: ₹${maxAmount}`}
+                placeholder={Number.isFinite(maxAmount)
+                  ? `Min: ${formatINR(minAmount)} | Max: ${formatINR(maxAmount)}`
+                  : `Min: ${formatINR(minAmount)}`}
                 placeholderTextColor="#999"
                 keyboardType="decimal-pad"
                 onChangeText={(value) => {

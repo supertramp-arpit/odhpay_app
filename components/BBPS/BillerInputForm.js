@@ -18,6 +18,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import SweetAlert from "../miscellaneous/SweetAlert";
 import { logBBPSFlow } from "../../utils/apiLogger";
+import BillerLogo from "./BillerLogo";
 
 
 
@@ -390,7 +391,7 @@ const VehicleRegistration = () => {
   return (
     <View style={styles.container}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-        {iconImage && (<Image style={{ width: 37, height: 37 }} source={{ uri: iconImage }} />)}
+        <BillerLogo billerId={biller_id} billerName={paymentBnak} size={37} />
         <Text style={styles.header}>{paymentBnak}</Text>
       </View>
 

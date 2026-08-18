@@ -17,6 +17,7 @@ import moment from "moment";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import Theme from "../Theme";
+import { channelLimits } from "../../utils/helper";
 
 const { width } = Dimensions.get("window");
 
@@ -74,8 +75,9 @@ const BillConfirmation = () => {
     );
   }
 
-  let minAmountDue = paymentChannels?.[0]?.minAmount ? parseFloat(paymentChannels[0].minAmount) : null;
-  let maxAmount = paymentChannels?.[0]?.maxAmount ? parseFloat(paymentChannels[0].maxAmount) : null;
+  // Paise -> rupees, and off the MOB channel we actually pay on (not
+  // paymentChannels[0], which is ATM and carries different limits).
+  const { minAmount: minAmountDue, maxAmount } = channelLimits(paymentChannels);
 
   const billDetails = {
     customerName: data?.customer_name || "N/A",
