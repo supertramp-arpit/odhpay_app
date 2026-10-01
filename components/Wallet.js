@@ -31,7 +31,6 @@ import {
   Plus,
   Send,
   TrendingUp,
-  UserRound,
   Wallet as WalletIcon,
   X,
 } from "lucide-react-native";
@@ -49,6 +48,7 @@ import { formatINR } from "../utils/helper";
 import { useWalletStore, useUserStore } from "../store";
 import { ActivityIndicator } from "react-native";
 import CCAvenueCheckout from "./Wallet/CCAvenueCheckout";
+import WalletGate from "./Wallet/WalletGate";
 
 const { width, height } = Dimensions.get("window");
 
@@ -320,8 +320,8 @@ const Wallet = () => {
 
   const quickActions = [
     { icon: Phone, label: "To Mobile", sublabel: "Number", screen: "ToMobile" },
-    { icon: Landmark, label: "To Bank", sublabel: "UPI ID", screen: "ToBank" },
-    { icon: UserRound, label: "To Self", sublabel: "Account", screen: "ToSelf" },
+    { icon: Landmark, label: "Withdraw", sublabel: "To bank", screen: "WalletWithdraw" },
+    { icon: CreditCard, label: "Bank", sublabel: "Accounts", screen: "ManageBanksScreen" },
     { icon: TrendingUp, label: "Investment", sublabel: "7.5% p.a.", screen: "ProjectInvestment" },
   ];
 
@@ -382,7 +382,7 @@ const Wallet = () => {
 
             <TouchableOpacity
               style={styles.withdrawBtn}
-              onPress={() => navigation.navigate("ToBank")}
+              onPress={() => navigation.navigate("WalletWithdraw")}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel="Withdraw to bank"
@@ -1048,4 +1048,11 @@ const styles = StyleSheet.create({
   },
 });
 
-export default Wallet;
+// Wallet is visible only to accounts an admin has wallet-enabled.
+const GatedWallet = () => (
+  <WalletGate>
+    <Wallet />
+  </WalletGate>
+);
+
+export default GatedWallet;

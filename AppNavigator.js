@@ -43,7 +43,8 @@ import ScratchCardScreen from "./components/reward/ScratchCardScreen";
 
 import ToBank from "./screens/TopServicces/ToBank";
 import AddUpiScreen from "./components/AddUpiScreen";
-import NewBank from "./components/NewBank";
+import AddBankAccount from "./components/WalletToBank/AddBankAccount";
+import WithdrawScreen from "./components/WalletToBank/WithdrawScreen";
 
 import Reward from "./components/Reward";
 
@@ -851,11 +852,29 @@ export default function AppNavigator() {
 
                 <Stack.Screen
                   name="NewBank"
-                  component={NewBank}
+                  component={AddBankAccount}
                   options={{
                     headerShown: true,
-                    headerTitle: "Add New Bank",
+                    headerTitle: "Add bank account",
+                    headerTintColor: "white",
                     // headerTitleAlign: "center",
+                    headerStyle: {
+                      backgroundColor: Theme.colors.primary,
+                    },
+                    headerTitleStyle: {
+                      color: "white",
+                      fontSize: 20,
+                    },
+                  }}
+                />
+
+                <Stack.Screen
+                  name="WalletWithdraw"
+                  component={WithdrawScreen}
+                  options={{
+                    headerShown: true,
+                    headerTitle: "Withdraw to bank",
+                    headerTintColor: "white",
                     headerStyle: {
                       backgroundColor: Theme.colors.primary,
                     },
@@ -1050,7 +1069,16 @@ export default function AppNavigator() {
                   name="ManageBanksScreen"
                   component={ManageBanksScreen}
                   options={{
-                    headerShown: false,
+                    headerShown: true,
+                    headerTitle: "Bank accounts",
+                    headerTintColor: "white",
+                    headerStyle: {
+                      backgroundColor: Theme.colors.primary,
+                    },
+                    headerTitleStyle: {
+                      color: "white",
+                      fontSize: 20,
+                    },
                   }}
                 />
 

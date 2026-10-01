@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -116,5 +117,36 @@ export const useUserStore = create(
     }
   )
 );
+
+// The check_user payload is wrapped ({ user: {...}, ... }); unwrap defensively.
+const selectWalletEnabled = (s) => {
+  const u = s.user?.user ?? s.user;
+  return u ? u.wallet_enabled : undefined;
+};
+
+/**
+ * Wallet access granted by an admin: 'enabled' | 'disabled' | 'unknown'.
+ * Wallet UI (balance, Add Money, Withdraw, bank accounts) renders only when 'enabled'.
+ * A cached profile from before the backend sent this flag has it undefined —
+ * refresh once ('unknown' meanwhile) instead of hiding the wallet from an enabled user.
+ */
+let walletFlagRefreshRequested = false;
+export const useWalletAccess = () => {
+  const enabled = useUserStore(selectWalletEnabled);
+  const hasUser = useUserStore((s) => !!s.user);
+  useEffect(() => {
+    if (enabled === undefined && !walletFlagRefreshRequested) {
+      walletFlagRefreshRequested = true;
+      useUserStore.getState().fetchUser({ force: hasUser }).catch(() => {
+        walletFlagRefreshRequested = false; // allow a retry
+      });
+    }
+  }, [hasUser, enabled]);
+  if (enabled === true) return 'enabled';
+  if (enabled === false) return 'disabled';
+  return 'unknown';
+};
+
+export const useWalletEnabled = () => useWalletAccess() === 'enabled';
 
 export default useUserStore;

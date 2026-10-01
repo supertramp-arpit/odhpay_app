@@ -1,89 +1,64 @@
 import { create } from 'zustand';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { WALLET_API as BASE_URL, apiErrorMessage, authHeaders, signedAuthHeaders } from '../utils/walletApi';
 
-// Masked display form of an account number — never show the full number.
-const maskAccount = (acc) => {
-  const digits = String(acc || '').replace(/\D/g, '');
-  return digits.length >= 4 ? `•••••• ${digits.slice(-4)}` : '——';
-};
+export { apiErrorMessage };
 
-// Real accounts come from the backend (user_added_bank_details, type "self",
-// KYC-verified only). This store used to ship a persisted hardcoded
-// "John Doe" demo list — dropping `persist` also orphans that cached data.
+const toBank = (row) => ({
+  id: row.id,
+  bankName: row.bank_name || 'Bank account',
+  accountHolderName: row.account_holder || '',
+  ifscCode: row.ifsc || '',
+  accountNumber: row.account_number_masked, // server only ever sends the masked form
+});
+
+// Saved withdrawal accounts — /api/v1/wallet/banks (wallet-enabled users only).
 export const useBankStore = create((set, get) => ({
   banks: [],
+  maxAccounts: 5,
   isLoading: false,
+  loaded: false,
   error: null,
 
   fetchBanks: async () => {
     try {
       set({ isLoading: true, error: null });
-      const token = await AsyncStorage.getItem('access_token');
-      const res = await axios.get(
-        'https://newapi.odhpay.com/payments/get_all_user_accounts',
-        {
-          params: { banktype: 'self' },
-          headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      const rows = Array.isArray(res.data?.data) ? res.data.data : [];
+      const res = await axios.get(`${BASE_URL}/banks`, { headers: await authHeaders() });
+      const rows = Array.isArray(res.data?.banks) ? res.data.banks : [];
       set({
-        banks: rows.map((row, index) => ({
-          id: row.id,
-          bankName: row.bankName || 'Bank account',
-          accountHolderName: row.bankACHolder || '',
-          ifscCode: row.bankIFSC || '',
-          accountNumber: maskAccount(row.bankACNumber),
-          isPrimary: index === 0,
-        })),
+        banks: rows.map(toBank),
+        maxAccounts: res.data?.max_accounts || 5,
         isLoading: false,
+        loaded: true,
       });
     } catch (e) {
-      set({ isLoading: false, error: 'Could not load bank accounts' });
+      set({ isLoading: false, loaded: true, error: apiErrorMessage(e, 'Could not load bank accounts') });
     }
   },
 
-  // Get primary bank
-  getPrimaryBank: () => {
-    const { banks } = get();
-    return banks.find(bank => bank.isPrimary) || banks[0] || null;
+  // Throws on failure so the form can show the server's message.
+  addBank: async ({ accountHolder, accountNumber, confirmAccountNumber, ifsc }) => {
+    const res = await axios.post(
+      `${BASE_URL}/banks`,
+      {
+        account_holder: accountHolder,
+        account_number: accountNumber,
+        confirm_account_number: confirmAccountNumber,
+        ifsc,
+      },
+      { headers: await signedAuthHeaders() }
+    );
+    const bank = toBank(res.data.bank);
+    set((state) => ({ banks: [bank, ...state.banks.filter((b) => b.id !== bank.id)] }));
+    return bank;
   },
 
-  // Set a bank as primary (display preference; local only)
-  setPrimaryBank: (bankId) => {
-    set((state) => ({
-      banks: state.banks.map(bank => ({
-        ...bank,
-        isPrimary: bank.id === bankId,
-      })),
-    }));
-  },
-
-  // Local-only helpers kept for ManageBanksScreen compatibility.
-  // NOTE: a real add-bank must go through POST /payments/add_new_bank
-  // (OTP + KYC verification) — not yet wired in the app.
-  addBank: (bankData) => {
-    const newBank = {
-      ...bankData,
-      id: Date.now().toString(),
-      isPrimary: get().banks.length === 0,
-    };
-    set((state) => ({
-      banks: [...state.banks, newBank],
-    }));
-  },
-
-  removeBank: (bankId) => {
-    set((state) => {
-      const updatedBanks = state.banks.filter(bank => bank.id !== bankId);
-      if (updatedBanks.length > 0 && !updatedBanks.some(b => b.isPrimary)) {
-        updatedBanks[0].isPrimary = true;
-      }
-      return { banks: updatedBanks };
+  removeBank: async (bankId) => {
+    await axios.delete(`${BASE_URL}/banks/${bankId}`, {
+      headers: await signedAuthHeaders(),
     });
+    set((state) => ({ banks: state.banks.filter((bank) => bank.id !== bankId) }));
   },
+
+  getPrimaryBank: () => get().banks[0] || null,
 }));

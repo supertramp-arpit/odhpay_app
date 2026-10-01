@@ -20,6 +20,7 @@ import LottieView from 'lottie-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Theme from '../../components/Theme';
 import { useWalletStore } from '../../store/useWalletStore';
+import { useWalletEnabled } from '../../store/useUserStore';
 
 const { width, height } = Dimensions.get('window');
 const scale = width / 375;
@@ -102,6 +103,8 @@ const PrimeMembershipScreen = () => {
 
     // Get fetchBalance from wallet store
     const { fetchBalance } = useWalletStore();
+    // Prime is paid from the wallet — only possible when an admin enabled it
+    const walletEnabled = useWalletEnabled();
 
     // Check Prime membership status
     useEffect(() => {
@@ -400,8 +403,8 @@ const PrimeMembershipScreen = () => {
                     </LinearGradient>
                 </Animated.View>
 
-                {/* Wallet Balance Card - Only for non-members */}
-                {!isPrimeMember && (
+                {/* Wallet Balance Card - Only for non-members with wallet access */}
+                {!isPrimeMember && walletEnabled && (
                 <Animated.View style={[styles.balanceCard, { opacity: fadeAnim }]}>
                     <View style={styles.balanceLeft}>
                         <MaterialIcons name="account-balance-wallet" size={normalize(22)} color={Theme.colors.primary} />
@@ -435,14 +438,16 @@ const PrimeMembershipScreen = () => {
                 <View style={styles.termsNote}>
                     <MaterialIcons name="info-outline" size={normalize(16)} color={Theme.colors.textSecondary} />
                     <Text style={styles.termsText}>
-                        By activating Prime, you agree to our terms and conditions. Amount will be deducted from your wallet.
+                        {walletEnabled
+                            ? 'By activating Prime, you agree to our terms and conditions. Amount will be deducted from your wallet.'
+                            : "Prime is paid from your ODH Pay wallet, which isn't enabled on your account yet. Contact support to get access."}
                     </Text>
                 </View>
                 )}
             </ScrollView>
 
             {/* Bottom CTA */}
-            {!isPrimeMember && (
+            {!isPrimeMember && walletEnabled && (
             <View style={styles.bottomContainer}>
                 <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
                     <TouchableOpacity

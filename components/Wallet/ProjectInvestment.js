@@ -52,7 +52,7 @@ import {
 import { formatINR } from "../../utils/helper";
 import { downloadInvestmentCertificate } from "../../utils/certificate";
 import { getIntegrityToken } from "../../utils/integrity";
-import { useWalletStore } from "../../store";
+import { useWalletStore, useWalletEnabled } from "../../store";
 
 const BASE_URL = "https://newapi.odhpay.com";
 const QR_LIMIT = 100000; // ≤ ₹1L may pay via UPI QR (ICICI limit)
@@ -385,6 +385,7 @@ const ProjectInvestment = () => {
   // Payment flow
   const [payStep, setPayStep] = useState("review"); // review|pin|processing|qr|success
   const [payMethod, setPayMethod] = useState("wallet"); // 'wallet' | 'icici_qr'
+  const walletEnabled = useWalletEnabled();
   const [payError, setPayError] = useState(null);
   const [pinText, setPinText] = useState("");
   const [walletAvailable, setWalletAvailable] = useState(null);
@@ -477,6 +478,12 @@ const ProjectInvestment = () => {
     setInvestResult(null);
     setPayStep("review");
     setSheet("pay");
+    if (!walletEnabled) {
+      // Wallet not enabled for this account — QR is the only way to pay.
+      setWalletAvailable(null);
+      setPayMethod("icici_qr");
+      return;
+    }
     try {
       const res = await fetchBalance();
       const bal = parseFloat(res?.available_balance ?? res?.balance ?? 0);
@@ -865,6 +872,7 @@ const ProjectInvestment = () => {
 
                 <Text style={[styles.fieldLabel, { marginTop: space.lg }]}>Pay using</Text>
 
+                {walletEnabled && (
                 <TouchableOpacity
                   style={[
                     styles.methodRow,
@@ -906,6 +914,7 @@ const ProjectInvestment = () => {
                     <Check size={18} color={color.text} strokeWidth={2.5} />
                   )}
                 </TouchableOpacity>
+                )}
 
                 {qrEligible && (
                   <TouchableOpacity
@@ -933,6 +942,7 @@ const ProjectInvestment = () => {
                 {!qrEligible && (
                   <Text style={styles.methodNote}>
                     UPI QR is available for amounts up to {formatINR(QR_LIMIT, { decimals: 0 })}
+                    {!walletEnabled ? ". Please enter a smaller amount." : ""}
                   </Text>
                 )}
 
@@ -946,9 +956,14 @@ const ProjectInvestment = () => {
                 <TouchableOpacity
                   style={[
                     styles.sheetPrimaryBtn,
-                    payMethod === "wallet" && walletInsufficient && styles.ctaButtonDisabled,
+                    ((payMethod === "wallet" && walletInsufficient) ||
+                      (payMethod === "icici_qr" && !qrEligible)) &&
+                      styles.ctaButtonDisabled,
                   ]}
-                  disabled={payMethod === "wallet" && walletInsufficient}
+                  disabled={
+                    (payMethod === "wallet" && walletInsufficient) ||
+                    (payMethod === "icici_qr" && !qrEligible)
+                  }
                   onPress={() =>
                     payMethod === "wallet" ? setPayStep("pin") : doInvest("icici_qr")
                   }

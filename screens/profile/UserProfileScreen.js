@@ -27,7 +27,7 @@ import {
 } from "lucide-react-native";
 
 import Theme from "../../components/Theme";
-import useUserStore from "../../store/useUserStore";
+import useUserStore, { useWalletEnabled } from "../../store/useUserStore";
 import { useBankStore } from "../../store/useBankStore";
 import { useKycDetailStore } from "../../store/useKycStore";
 import { color, space, radius, type, tabularNums, elevation, hitSlop8 } from "../../theme/tokens";
@@ -39,9 +39,10 @@ const UserProfileScreen = () => {
     const [isLoadingLogout, setIsLoadingLogout] = useState(false);
     const fadeAnim = useState(new Animated.Value(0))[0];
 
-    // Get primary bank from store (real accounts via /payments/get_all_user_accounts)
+    // Withdrawal accounts (/api/v1/wallet/banks) — wallet-enabled accounts only
+    const walletEnabled = useWalletEnabled();
     const banks = useBankStore((state) => state.banks);
-    const primaryBank = banks.find(bank => bank.isPrimary) || banks[0] || null;
+    const primaryBank = banks[0] || null;
 
     useEffect(() => {
         Animated.timing(fadeAnim, {
@@ -59,8 +60,13 @@ const UserProfileScreen = () => {
             if (!storeUser || Date.now() - (updatedAt || 0) > ttlMs) {
                 useUserStore.getState().fetchUser().catch(() => { });
             }
-            useBankStore.getState().fetchBanks?.();
         }, [])
+    );
+
+    useFocusEffect(
+        React.useCallback(() => {
+            if (walletEnabled) useBankStore.getState().fetchBanks();
+        }, [walletEnabled])
     );
 
     useEffect(() => {
@@ -169,12 +175,13 @@ const UserProfileScreen = () => {
             >
                 {/* Pay card: bank + QR */}
                 <View style={styles.payCard}>
+                    {walletEnabled && (
                     <TouchableOpacity
                         style={styles.bankRow}
                         activeOpacity={0.7}
                         onPress={() => navigation.navigate("ManageBanksScreen")}
                         accessibilityRole="button"
-                        accessibilityLabel={primaryBank ? `Primary bank ${primaryBank.bankName}` : "Add bank account"}
+                        accessibilityLabel={primaryBank ? `Bank account ${primaryBank.bankName}` : "Add bank account"}
                     >
                         <View style={styles.bankDisc}>
                             <Landmark size={18} color={color.textSecondary} strokeWidth={2} />
@@ -187,13 +194,9 @@ const UserProfileScreen = () => {
                                 {primaryBank ? primaryBank.accountNumber : 'Tap to link your bank'}
                             </Text>
                         </View>
-                        {primaryBank && (
-                            <View style={styles.primaryPill}>
-                                <Text style={styles.primaryPillText}>Primary</Text>
-                            </View>
-                        )}
                         <ChevronRight size={18} color={color.gray300} strokeWidth={2} />
                     </TouchableOpacity>
+                    )}
 
                     {/* Rendered locally — never send the user's number to a
                         third-party QR service. A bare 10-digit number is the
@@ -213,8 +216,10 @@ const UserProfileScreen = () => {
                 {/* Menu Sections */}
                 <Text style={styles.sectionLabel}>Account</Text>
                 <View style={styles.menuCard}>
-                    <MenuRow icon={User} title="Personal Information" onPress={() => navigation.navigate("UserProfile")} />
-                    <MenuRow icon={Landmark} title="Bank Accounts" onPress={() => navigation.navigate("ManageBanksScreen")} isLast />
+                    <MenuRow icon={User} title="Personal Information" onPress={() => navigation.navigate("UserProfile")} isLast={!walletEnabled} />
+                    {walletEnabled && (
+                        <MenuRow icon={Landmark} title="Bank Accounts" onPress={() => navigation.navigate("ManageBanksScreen")} isLast />
+                    )}
                 </View>
 
                 <Text style={styles.sectionLabel}>Security</Text>

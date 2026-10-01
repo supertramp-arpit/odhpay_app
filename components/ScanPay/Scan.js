@@ -23,6 +23,7 @@ import Theme from "../Theme";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
+import { useUserStore } from "../../store";
 
 const { width, height } = Dimensions.get('window');
 const SCAN_AREA_SIZE = width * 0.7;
@@ -197,7 +198,17 @@ export default function Scan() {
 
             try {
                 if ((!isNaN(data)) && (data.length == 10)) {
-                    console.log('it is the 10 digit mobile Number')
+                    // Paying an ODH Pay user moves wallet money — admin-enabled accounts only.
+                    const u = useUserStore.getState().user;
+                    if ((u?.user ?? u)?.wallet_enabled !== true) {
+                        setScanStatus('error');
+                        Alert.alert(
+                            'Wallet not enabled',
+                            "Paying ODH Pay users uses your wallet, which isn't enabled on your account. You can still scan any UPI QR to pay.",
+                            [{ text: 'OK', onPress: resetScanner }]
+                        );
+                        return;
+                    }
                     fetchNameFromMobile(data)
                 }
                 // Validate URL before opening

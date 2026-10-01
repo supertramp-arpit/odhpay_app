@@ -19,6 +19,7 @@ import {
 } from "@expo/vector-icons";
 import Theme from "../../components/Theme";
 import { useWalletStore } from "../../store/useWalletStore";
+import WalletGate from "../../components/Wallet/WalletGate";
 
 const { width } = Dimensions.get("window");
 const OFFER_W = width * 0.78;
@@ -884,4 +885,10 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CheckWalletBalance;
+const GatedCheckWalletBalance = (props) => (
+  <WalletGate>
+    <CheckWalletBalance {...props} />
+  </WalletGate>
+);
+
+export default GatedCheckWalletBalance;

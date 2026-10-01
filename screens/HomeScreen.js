@@ -22,7 +22,7 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useCameraPermissions } from "expo-camera";
 import Theme from "../components/Theme";
 import * as LocalAuthentication from "expo-local-authentication";
-import { useUserStore } from "../store";
+import { useUserStore, useWalletEnabled } from "../store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -233,6 +233,7 @@ const HomeScreen = () => {
   const [quickPayLoading, setQuickPayLoading] = useState(false);
 
   const user = useUserStore(s => s.user);
+  const walletEnabled = useWalletEnabled();
   const { top: safeTop } = useSafeAreaInsets();
   const payload = user?.user ? user.user : user;
   const kycDetails = useKycDetailStore(s => s.data);
@@ -691,20 +692,22 @@ const HomeScreen = () => {
             </View>
           </TouchableOpacity>
           <View style={{ marginLeft: 10, flexShrink: 1 }}>
-            <TouchableOpacity
-              style={styles.balanceRow}
-              onPress={() => {
-                payload?.TransactionPIN
-                  ? navigation.navigate("checkWallet")
-                  : navigation.navigate("TransactionPin");
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.balanceText}>
-                Balance: ₹{payload?.balance ?? payload?.MainBalance ?? 0}
-              </Text>
-              <Ionicons name="chevron-down" size={14} color="#FFFFFF" />
-            </TouchableOpacity>
+            {walletEnabled && (
+              <TouchableOpacity
+                style={styles.balanceRow}
+                onPress={() => {
+                  payload?.TransactionPIN
+                    ? navigation.navigate("checkWallet")
+                    : navigation.navigate("TransactionPin");
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.balanceText}>
+                  Balance: ₹{payload?.balance ?? payload?.MainBalance ?? 0}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
             <Text style={styles.upiIdText} numberOfLines={1}>
               UPI ID: {payload?.MobileNumber || "—"}@odh
             </Text>
@@ -816,22 +819,24 @@ const HomeScreen = () => {
         )}
 
         <View style={[styles.card, styles.features]}>
-          <TouchableOpacity
-            onPress={() => navigation.navigate("Wallet")}
-            accessibilityRole="button"
-            accessibilityLabel="Open Wallet"
-          >
-            <View style={styles.feature}>
-              <LinearGradient
-                colors={["#34D399", "#059669"]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={styles.feature3dIcon}
-              >
-                <MaterialIcons name="account-balance-wallet" size={22} color="#FFF" />
-              </LinearGradient>
-              <Text style={styles.featureText}>Wallet</Text>
-            </View>
-          </TouchableOpacity>
+          {walletEnabled && (
+            <TouchableOpacity
+              onPress={() => navigation.navigate("Wallet")}
+              accessibilityRole="button"
+              accessibilityLabel="Open Wallet"
+            >
+              <View style={styles.feature}>
+                <LinearGradient
+                  colors={["#34D399", "#059669"]}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                  style={styles.feature3dIcon}
+                >
+                  <MaterialIcons name="account-balance-wallet" size={22} color="#FFF" />
+                </LinearGradient>
+                <Text style={styles.featureText}>Wallet</Text>
+              </View>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity onPress={() => navigation.navigate("ScratchCardScreen")}>
             <View style={styles.feature}>
